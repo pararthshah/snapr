@@ -1,6 +1,7 @@
 #include "Snap.h"
 
 int main() {
+<<<<<<< HEAD
   srand(time(0));
   THashPar<TInt, TIntV> T;
   T.ResizePar(1000);
