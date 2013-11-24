@@ -737,114 +737,7 @@ void TTable::StoreGroupCol(const TStr& GroupColName, const TVec<TPair<TInt, TInt
   }
 }
 
-void TTable::GroupAuxPar(const TStrV& GroupBy, THash<TGroupKey, TPair<TInt, TIntV> >& Grouping, TBool Ordered, const TStr& GroupColName, TBool KeepUnique,
-    TIntV& UniqueVec) {
-  TIntV IntGroupByCols;
-  TIntV FltGroupByCols;
-  TIntV StrGroupByCols;
-  // get indices for each column type
-  for(TInt c = 0; c < GroupBy.Len(); c++){
-    if(!ColTypeMap.IsKey(GroupBy[c])){TExcept::Throw("no such column " + GroupBy[c]);}
-
-    TPair<TAttrType, TInt> ColType = ColTypeMap.GetDat(GroupBy[c]);
-    switch(ColType.Val1){
-      case atInt:
-        IntGroupByCols.Add(ColType.Val2);
-        break;
-      case atFlt:
-        FltGroupByCols.Add(ColType.Val2);
-        break;
-      case atStr:
-        StrGroupByCols.Add(ColType.Val2);
-        break;
-    }
-  }
-
-  TInt IKLen = IntGroupByCols.Len();
-  TInt FKLen = FltGroupByCols.Len();
-  TInt SKLen = StrGroupByCols.Len();
-
-  TInt GroupNum = 0;
-  TInt IdColIdx = ColTypeMap.GetDat(IdColName).Val2;
-
-  TVec<TPair<TInt, TInt> > GroupAndRowIds;
-
-  // iterate over rows
-
-  for(TRowIterator it = BegRI(); it < EndRI(); it++){
-    TIntV IKey(IKLen + SKLen, 0);
-    TFltV FKey(FKLen, 0);
-    TIntV SKey(SKLen, 0);
-
-    // find group key
-    for(TInt c = 0; c < IKLen; c++){
-      IKey.Add(it.GetIntAttr(IntGroupByCols[c])); 
-    }
-    for(TInt c = 0; c < FKLen; c++){
-      FKey.Add(it.GetFltAttr(FltGroupByCols[c])); 
-    }
-    for(TInt c = 0; c < SKLen; c++){
-      SKey.Add(it.GetStrMap(StrGroupByCols[c])); 
-    }
-    if(!Ordered){
-      if(IKLen > 0){IKey.ISort(0, IKey.Len()-1, true);}
-      if(FKLen > 0){FKey.ISort(0, FKey.Len()-1, true);}
-      if(SKLen > 0){SKey.ISort(0, SKey.Len()-1, true);}
-    }
-    for(TInt c = 0; c < SKLen; c++){
-      IKey.Add(SKey[c]);
-    }
-
-    // look for group matching to the key
-    TGroupKey GroupKey = TGroupKey(IKey, FKey);
-
-    TInt RowIdx = it.GetRowIdx();
-    if (!Grouping.IsKey(GroupKey)) {
-      // Grouping key hasn't been seen before, create a new group
-      TPair<TInt, TIntV> NewGroup;
-      NewGroup.Val1 = GroupNum;
-      NewGroup.Val2.Add(IntCols[IdColIdx][RowIdx]);
-      Grouping.AddDat(GroupKey, NewGroup);
-      if (GroupColName != "") {
-        GroupAndRowIds.Add(TPair<TInt, TInt>(GroupNum, RowIdx));
-      }
-      if (KeepUnique) { 
-        UniqueVec.Add(RowIdx);
-      }
-      GroupNum++;
-    } else {
-      // Grouping key has been seen before, update corresponding group
-      if (!KeepUnique) {
-        TPair<TInt, TIntV>& NewGroup = Grouping.GetDat(GroupKey);
-        NewGroup.Val2.Add(IntCols[IdColIdx][RowIdx]);
-        if (GroupColName != "") {
-          GroupAndRowIds.Add(TPair<TInt, TInt>(NewGroup.Val1, RowIdx));
-        }
-      }
-    }
-  }
-
-  // update group mapping
-  if (!KeepUnique) {
-    TPair<TStrV, TBool> GroupStmt(GroupBy, Ordered);
-    GroupStmtNames.AddDat(GroupColName, GroupStmt);
-    GroupIDMapping.AddDat(GroupStmt);
-    GroupMapping.AddDat(GroupStmt);
-    for (THash<TGroupKey, TPair<TInt, TIntV> >::TIter it = Grouping.BegI(); it < Grouping.EndI(); it++) {
-      TGroupKey key = it.GetKey();
-      TPair<TInt, TIntV> group = it.GetDat();
-      GroupIDMapping.GetDat(GroupStmt).AddDat(group.Val1, key);
-      GroupMapping.GetDat(GroupStmt).AddDat(key, group.Val2);
-    }
-  }
-
-  // add a column to the table
-  if (GroupColName != "") {
-    StoreGroupCol(GroupColName, GroupAndRowIds);
-    AddSchemaCol(GroupColName, atInt);  // update schema
-  }
-}
-
+// core crouping logic
 void TTable::GroupAux(const TStrV& GroupBy, THash<TGroupKey, TPair<TInt, TIntV> >& Grouping, TBool Ordered, const TStr& GroupColName, TBool KeepUnique,
     TIntV& UniqueVec) {
   TIntV IntGroupByCols;
@@ -952,20 +845,12 @@ void TTable::GroupAux(const TStrV& GroupBy, THash<TGroupKey, TPair<TInt, TIntV> 
   }
 }
 
-
 // grouping begins here
 void TTable::Group(const TStrV& GroupBy, const TStr& GroupColName, TBool Ordered) {
   TIntV UniqueVec;
   THash<TGroupKey, TPair<TInt, TIntV> >Grouping;
   // by default, we assume we don't want unique rows
   GroupAux(GroupBy, Grouping, Ordered, GroupColName, false, UniqueVec);
-}
-
-void TTable::GroupPar(const TStrV& GroupBy, const TStr& GroupColName, TBool Ordered) {
-  TIntV UniqueVec;
-  THash<TGroupKey, TPair<TInt, TIntV> >Grouping;
-  // by default, we assume we don't want unique rows
-  GroupAuxPar(GroupBy, Grouping, Ordered, GroupColName, false, UniqueVec);
 }
 
 void TTable::Aggregate(const TStrV& GroupByAttrs, TAttrAggr AggOp,
