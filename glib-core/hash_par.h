@@ -160,7 +160,6 @@ public:
         pthread_mutex_unlock(&lock);
       } else {
         KeyId=FFreeKeyId; FFreeKeyId=KeyDatV[FFreeKeyId].Next; FreeKeys--;
-        pthread_mutex_unlock(&lock);
         KeyDatV[KeyId].Next=-1;
         KeyDatV[KeyId].HashCd=HashCd;
         KeyDatV[KeyId].Key=Key;
