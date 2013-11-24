@@ -1163,15 +1163,10 @@ public:
   void GroupAux(const TStrV& GroupBy, THash<TGroupKey, TPair<TInt, TIntV> >& Grouping, TBool Ordered,
     const TStr& GroupColName, TBool KeepUnique, TIntV& UniqueVec);
 
-  void GroupAuxPar(const TStrV& GroupBy, THash<TGroupKey, TPair<TInt, TIntV> >& Grouping, TBool Ordered,
-    const TStr& GroupColName, TBool KeepUnique, TIntV& UniqueVec);
-
   // group - specify columns to group by, name of column in new table, whether to treat columns as ordered
   // if name of column is an empty string, no column is created
   void Group(const TStrV& GroupBy, const TStr& GroupColName, TBool Ordered = true);
   
-  void GroupPar(const TStrV& GroupBy, const TStr& GroupColName, TBool Ordered = true);
-
   // count - count the number of appearences of the different elements of col
   // record results in column CountCol
   void Count(const TStr& CountColName, const TStr& Col);
