@@ -2,6 +2,16 @@
 #define HASH_PAR_H
 #include "bd.h"
 
+inline unsigned int __sync_fetch_and_add(volatile unsigned int* p, unsigned int incr)
+{
+    unsigned int result;
+    asm volatile("lock; xadd %0, %1" :
+            "=r"(result), "=m"(*p):
+            "0"(incr), "m"(*p) :
+            "memory");
+    return result + 1;
+}
+
 /////////////////////////////////////////////////
 // Hash-Table
 template<class TKey, class TDat, class THashFunc = TDefaultHashFunc<TKey> >
@@ -161,9 +171,8 @@ public:
       if (KeyId==-1) {
         if (port_lock == false) continue;
 
-        pthread_mutex_lock(&lock);
-        KeyId = FFreeKeyId++;
-        pthread_mutex_unlock(&lock);
+        volatile unsigned int *p = (volatile unsigned int *)&FFreeKeyId.Val;
+        KeyId = __sync_fetch_and_add(p, 1);
 
         KeyDatV[KeyId].Next=-1;
         KeyDatV[KeyId].HashCd=HashCd;
