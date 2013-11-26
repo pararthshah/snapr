@@ -628,7 +628,7 @@ void TTable::KeepSortedRows(const TIntV& KeepV){
   }
 }
 
-void TTable::GetPartitionRanges(TIntPrV& Partitions, TInt ChunksPerThread){
+void TTable::GetPartitionRanges(TIntPrV& Partitions, TInt ChunksPerThread) const {
   TInt PartitionSize = NumValidRows / (omp_get_max_threads()*ChunksPerThread);
   if (PartitionSize < 10) { PartitionSize = 10;}
   TRowIterator RI = BegRI();
@@ -1221,6 +1221,35 @@ PTable TTable::Join(const TStr& Col1, const TTable& Table, const TStr& Col2) {
     case atInt:{
       THash<TInt, TIntV> T;
       TS.GroupByIntCol(ColS, T, TIntV(), true);
+      #ifdef _OPENMP
+      JointTable->ResizeTable(TB.NumValidRows);
+      TIntPrV Partitions;
+      TB.GetPartitionRanges(Partitions, 10);
+      TIntPrV JointRowIDs;
+      
+      #pragma omp parallel for schedule(static) private(JointRowIDs)
+      for (int i = 0; i < Partitions.Len(); i++){
+        TRowIterator RowI(Partitions[i].GetVal1(), this);
+        TRowIterator EndI(Partitions[i].GetVal2(), this);
+        while (RowI < EndI) {
+          TInt K = RowI.GetIntAttr(ColB);
+          if(T.IsKey(K)){
+            TIntV& Group = T.GetDat(K);
+            for(TInt i = 0; i < Group.Len(); i++){
+              if(ThisIsSmaller){
+                JointRowIDs.Add(TIntPr(Group[i], RowI.GetRowIdx()));
+              } else{
+                JointRowIDs.Add(TIntPr(RowI.GetRowIdx(), Group[i]));
+              }
+            }
+          }
+          RowI++;
+        }
+        JointTable->AddNJointRows(*this, Table, JointRowIDs);
+        printf("Thread %d: i = %d, start = %d, end = %d\n", omp_get_thread_num(), i,
+          Partitions[i].GetVal1().Val, Partitions[i].GetVal2().Val);
+      }
+      #else
       for(TRowIterator RowI = TB.BegRI(); RowI < TB.EndRI(); RowI++){
         TInt K = RowI.GetIntAttr(ColB);
         if(T.IsKey(K)){
@@ -1234,6 +1263,7 @@ PTable TTable::Join(const TStr& Col1, const TTable& Table, const TStr& Col2) {
           }
         }
       }
+      #endif
       break;
     }
     case atFlt:{
@@ -1273,8 +1303,9 @@ PTable TTable::Join(const TStr& Col1, const TTable& Table, const TStr& Col2) {
     }
     break;
   }
- JointTable->InitIds();
- return JointTable; 
+  printf("JointTable: %d\n", JointTable->NumRows.Val);
+  JointTable->InitIds();
+  return JointTable; 
 }
 
 /*
@@ -1434,7 +1465,7 @@ void TTable::SelectAtomicIntConst(const TStr& Col1, const TInt& Val2, TPredComp 
   } else{
     #ifdef _OPENMP
     TIntPrV Partitions;
-    GetPartitionRanges(Partitions, 100);
+    GetPartitionRanges(Partitions, 10);
     TVec<TIntV> SelectedRowSet(Partitions.Len());
   
     #pragma omp parallel for schedule(dynamic) shared(SelectedRowSet)
@@ -2719,7 +2750,8 @@ int TTable::GetEmptyRowsStart(int NewRows) {
   NumRows += NewRows;
   NumValidRows += NewRows;
   // to make this function thread-safe, the following call must be done before the code enters parallel region.
-  ResizeTable(NumRows);
+  // ResizeTable(NumRows);
+  Assert(NumRows <= Next.Len());
   if (LastValidRow >= 0) {Next[LastValidRow] = start;}
   LastValidRow = start+NewRows-1;
   Next[LastValidRow] = Last;
@@ -2760,6 +2792,39 @@ void TTable::AddNRows(int NewRows, const TVec<TIntV>& IntColsP, const TVec<TFltV
     }
     for(TInt i = 0; i < StrColMapsP.Len(); i++){
       StrColMaps[i][start+r] = StrColMapsP[i][r];
+    }
+  }
+  for(TInt r = 0; r < NewRows-1; r++){
+    Next[start+r] = start+r+1;
+  }
+}
+
+void TTable::AddNJointRows(const TTable& T1, const TTable& T2, const TIntPrV& RowIDs) {
+  int NewRows = RowIDs.Len();
+  if (NewRows == 0) {return;}
+  // this call should be thread-safe
+  int start = GetEmptyRowsStart(NewRows);
+  for (TInt r = 0; r < NewRows; r++){
+    for(TInt i = 0; i < T1.IntCols.Len(); i++){
+      IntCols[i][start+r] = T1.IntCols[i][RowIDs[r].GetVal1()];
+    }
+    for(TInt i = 0; i < T1.FltCols.Len(); i++){
+      FltCols[i][start+r] = T1.FltCols[i][RowIDs[r].GetVal1()];
+    }
+    for(TInt i = 0; i < T1.StrColMaps.Len(); i++){
+      StrColMaps[i][start+r] = T1.StrColMaps[i][RowIDs[r].GetVal1()];
+    }
+    TInt IntOffset = T1.IntCols.Len();
+    TInt FltOffset = T1.FltCols.Len();
+    TInt StrOffset = T1.StrColMaps.Len();
+    for(TInt i = 0; i < T2.IntCols.Len(); i++){
+      IntCols[i+IntOffset][start+r] = T2.IntCols[i][RowIDs[r].GetVal2()];
+    }
+    for(TInt i = 0; i < T2.FltCols.Len(); i++){
+      FltCols[i+FltOffset][start+r] = T2.FltCols[i][RowIDs[r].GetVal2()];
+    }
+    for(TInt i = 0; i < T2.StrColMaps.Len(); i++){
+      StrColMaps[i+StrOffset][start+r] = T2.StrColMaps[i][RowIDs[r].GetVal2()];
     }
   }
   for(TInt r = 0; r < NewRows-1; r++){
