@@ -17,7 +17,7 @@ inline unsigned int __sync_fetch_and_add(volatile unsigned int* p, unsigned int 
 template<class TKey, class TDat, class THashFunc = TDefaultHashFunc<TKey> >
 class THashPar{
 public:
-  pthread_mutex_t lock;
+  //pthread_mutex_t lock;
   enum {HashPrimes=32};
   static const unsigned int HashPrimeT[HashPrimes];
 public:
@@ -58,25 +58,25 @@ public:
   THashPar():
     PortV(), KeyDatV(),
     AutoSizeP(true), FFreeKeyId(-1), FreeKeys(0){
-      lock = PTHREAD_MUTEX_INITIALIZER;
+      //lock = PTHREAD_MUTEX_INITIALIZER;
     }
   THashPar(const THashPar& Hash):
     PortV(Hash.PortV), KeyDatV(Hash.KeyDatV), AutoSizeP(Hash.AutoSizeP),
     FFreeKeyId(Hash.FFreeKeyId), FreeKeys(Hash.FreeKeys) {
-      lock = PTHREAD_MUTEX_INITIALIZER;
+      //lock = PTHREAD_MUTEX_INITIALIZER;
     }
   explicit THashPar(const int& ExpectVals, const bool& _AutoSizeP=false);
   explicit THashPar(TSIn& SIn):
     PortV(SIn), KeyDatV(SIn),
     AutoSizeP(SIn), FFreeKeyId(SIn), FreeKeys(SIn){
     SIn.LoadCs();
-    lock = PTHREAD_MUTEX_INITIALIZER;
+    //lock = PTHREAD_MUTEX_INITIALIZER;
   }
   void Load(TSIn& SIn){
     PortV.Load(SIn); KeyDatV.Load(SIn);
     AutoSizeP=TBool(SIn); FFreeKeyId=TInt(SIn); FreeKeys=TInt(SIn);
     SIn.LoadCs();
-    lock = PTHREAD_MUTEX_INITIALIZER;
+    //lock = PTHREAD_MUTEX_INITIALIZER;
   }
   void Save(TSOut& SOut) const {
     PortV.Save(SOut); KeyDatV.Save(SOut);
