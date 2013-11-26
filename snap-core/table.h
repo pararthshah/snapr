@@ -683,12 +683,13 @@ namespace TSnap {
     const double& C = 0.85, const double& Eps = 1e-4, const int& MaxIter = 100) {
     int NumGraphs = GraphSeq.Len();
     TableSeq.Reserve(NumGraphs, NumGraphs);
-    // this loop is parallelizable
+    TIntFltH PRankH;
+    #pragma omp parallel for private(PRankH) schedule(dynamic)
     for (TInt i = 0; i < NumGraphs; i++){
-      TIntFltH PRankH;
       GetPageRank(GraphSeq[i], PRankH, C, Eps, MaxIter);
       TableSeq[i] = TTable::TableFromHashMap(TableNamePrefix + "_" + i.GetStr(), 
         PRankH, "NodeId", "PageRank", Context, false);
+      //printf("Thread %d: i = %d, completed\n", omp_get_thread_num(), i.Val);
     }
   }
 }
