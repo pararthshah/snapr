@@ -3,7 +3,9 @@
 #include "predicate.h"
 #include "tmetric.h"
 //#include "snap.h"
+#ifdef _OPENMP
 #include <omp.h>
+#endif
 
 class TTable;
 typedef TPt<TTable> PTable;
@@ -491,6 +493,8 @@ public:
   TRowIteratorWithRemove BegRIWR(){ return TRowIteratorWithRemove(FirstValidRow, this);}
   TRowIteratorWithRemove EndRIWR(){ return TRowIteratorWithRemove(TTable::Last, this);}
 
+  void GetPartitionRanges(TIntPrV& Partitions, TInt ChunksPerThread);
+
 /***** Table Operations *****/
 	// rename / add a label to a column
 	void AddLabel(const TStr& Column, const TStr& NewLabel);
@@ -684,12 +688,16 @@ namespace TSnap {
     int NumGraphs = GraphSeq.Len();
     TableSeq.Reserve(NumGraphs, NumGraphs);
     TIntFltH PRankH;
+    #ifdef _OPENMP
     #pragma omp parallel for private(PRankH) schedule(dynamic)
+    #endif
     for (TInt i = 0; i < NumGraphs; i++){
       GetPageRank(GraphSeq[i], PRankH, C, Eps, MaxIter);
       TableSeq[i] = TTable::TableFromHashMap(TableNamePrefix + "_" + i.GetStr(), 
         PRankH, "NodeId", "PageRank", Context, false);
+      //#ifdef _OPENMP
       //printf("Thread %d: i = %d, completed\n", omp_get_thread_num(), i.Val);
+      //#endif
     }
   }
 }

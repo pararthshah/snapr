@@ -628,6 +628,26 @@ void TTable::KeepSortedRows(const TIntV& KeepV){
   }
 }
 
+void TTable::GetPartitionRanges(TIntPrV& Partitions, TInt ChunksPerThread){
+  TInt PartitionSize = NumValidRows / (omp_get_max_threads()*ChunksPerThread);
+  if (PartitionSize < 10) { PartitionSize = 10;}
+  TRowIterator RI = BegRI();
+  TInt currStart = RI.GetRowIdx();
+  TInt currCount = PartitionSize;
+  while (RI < EndRI()) {
+    if (currCount == 0) {
+      Partitions.Add(TIntPr(currStart, RI.GetRowIdx()));
+      currStart = RI.GetRowIdx();
+      currCount = PartitionSize;
+    }
+    RI++;
+    currCount--;
+  }
+  if (NumValidRows % PartitionSize != 0) { 
+    Partitions.Add(TIntPr(currStart, RI.GetRowIdx()));
+  }
+}
+
 /*****  Grouping Utility functions ****/
 void TTable::GroupByIntCol(const TStr& GroupBy, THash<TInt,TIntV>& grouping, const TIntV& IndexSet, TBool All) const{
   if(!ColTypeMap.IsKey(GroupBy)){TExcept::Throw("no such column " + GroupBy);}
@@ -1412,11 +1432,35 @@ void TTable::SelectAtomicIntConst(const TStr& Col1, const TInt& Val2, TPredComp 
       }
     }
   } else{
+    #ifdef _OPENMP
+    TIntPrV Partitions;
+    GetPartitionRanges(Partitions, 100);
+    TVec<TIntV> SelectedRowSet(Partitions.Len());
+  
+    #pragma omp parallel for schedule(dynamic) shared(SelectedRowSet)
+    for (int i = 0; i < Partitions.Len(); i++){
+      TRowIterator RowI(Partitions[i].GetVal1(), this);
+      TRowIterator EndI(Partitions[i].GetVal2(), this);
+      while (RowI < EndI) {
+        if(TPredicate::EvalAtom(RowI.GetIntAttr(Col1), Val2, Cmp)){ 
+          SelectedRowSet[i].Add(RowI.GetRowIdx());
+        }
+        RowI++;
+      }
+      //printf("Thread %d: i = %d, start = %d, end = %d\n", omp_get_thread_num(), i,
+      //  Partitions[i].GetVal1().Val, Partitions[i].GetVal2().Val);
+    }
+
+    for (int i = 0; i < SelectedRowSet.Len(); i++) {
+      SelectedRows.AddV(SelectedRowSet[i]);
+    }
+    #else
     for(TRowIterator RowI = BegRI(); RowI < EndRI(); RowI++){
       if(TPredicate::EvalAtom(RowI.GetIntAttr(Col1), Val2, Cmp)){ 
         SelectedRows.Add(RowI.GetRowIdx());
       }
     }
+    #endif
   }
 }
 
@@ -1444,11 +1488,33 @@ void TTable::SelectAtomicStrConst(const TStr& Col1, const TStr& Val2, TPredComp 
       }
     }
   } else{
+    #ifdef _OPENMP
+    TIntPrV Partitions;
+    GetPartitionRanges(Partitions, 10);
+    TVec<TIntV> SelectedRowSet(Partitions.Len());
+
+    #pragma omp parallel for schedule(dynamic) shared(SelectedRowSet)
+    for (int i = 0; i < Partitions.Len(); i++){
+      TRowIterator RowI(Partitions[i].GetVal1(), this);
+      TRowIterator EndI(Partitions[i].GetVal2(), this);
+      while (RowI < EndI) {
+        if(TPredicate::EvalStrAtom(RowI.GetStrAttr(Col1), Val2, Cmp)){ 
+          SelectedRowSet[i].Add(RowI.GetRowIdx());
+        }
+        RowI++;
+      }
+    }
+
+    for (int i = 0; i < SelectedRowSet.Len(); i++) {
+      SelectedRows.AddV(SelectedRowSet[i]);
+    }
+    #else
     for(TRowIterator RowI = BegRI(); RowI < EndRI(); RowI++){
       if(TPredicate::EvalStrAtom(RowI.GetStrAttr(Col1), Val2, Cmp)){ 
         SelectedRows.Add(RowI.GetRowIdx());
       }
     }
+    #endif
   }
 }
 
@@ -1477,11 +1543,35 @@ void TTable::SelectAtomicFltConst(const TStr& Col1, const TFlt& Val2, TPredComp 
       }
     }
   } else{
+    #ifdef _OPENMP
+    int PartitionSize = NumValidRows / (omp_get_max_threads()*10);
+    if (PartitionSize < 10) { PartitionSize = 10;}
+    TIntPrV Partitions;
+    GetPartitionRanges(Partitions, 10);
+    TVec<TIntV> SelectedRowSet(Partitions.Len());
+
+    #pragma omp parallel for schedule(dynamic) shared(SelectedRowSet)
+    for (int i = 0; i < Partitions.Len(); i++){
+      TRowIterator RowI(Partitions[i].GetVal1(), this);
+      TRowIterator EndI(Partitions[i].GetVal2(), this);
+      while (RowI < EndI) {
+        if(TPredicate::EvalAtom(RowI.GetFltAttr(Col1), Val2, Cmp)){ 
+          SelectedRowSet[i].Add(RowI.GetRowIdx());
+        }
+        RowI++;
+      }
+    }
+
+    for (int i = 0; i < SelectedRowSet.Len(); i++) {
+      SelectedRows.AddV(SelectedRowSet[i]);
+    }
+    #else
     for(TRowIterator RowI = BegRI(); RowI < EndRI(); RowI++){
       if(TPredicate::EvalAtom(RowI.GetFltAttr(Col1), Val2, Cmp)){ 
         SelectedRows.Add(RowI.GetRowIdx());
       }
     }
+    #endif
   }
 }
 
@@ -2149,7 +2239,9 @@ TVec<PNEANet> TTable::GetGraphsFromSequence(TAttrAggr AggrPolicy) {
   TVec<PNEANet> GraphSequence(RowIdBuckets.Len());
 
   //call BuildGraph on each row id set - parallelizable!
+  #ifdef _OPENMP
   #pragma omp parallel for schedule(dynamic)
+  #endif
   for (int i = 0; i < RowIdBuckets.Len(); i++) {
     if (RowIdBuckets[i].Len() == 0){ continue;}
     //printf("Thread %d: i = %d, BucketSize = %d\n", omp_get_thread_num(), i, RowIdBuckets[i].Len());
