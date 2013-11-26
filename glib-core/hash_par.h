@@ -1,7 +1,6 @@
 #ifndef HASH_PAR_H
 #define HASH_PAR_H
 #include "bd.h"
-#include "assert.h"
 
 /////////////////////////////////////////////////
 // Hash-Table
@@ -17,6 +16,7 @@ private:
   typedef THashKeyDat<TKey, TDat> THKeyDat;
   typedef TPair<TKey, TDat> TKeyDatP;
   TIntV PortV;
+  TIntV PortLockV;
   TVec<THKeyDat> KeyDatV;
   TBool AutoSizeP;
   TInt FFreeKeyId, FreeKeys;
@@ -130,57 +130,77 @@ public:
     return KeyDatV[AddKey(Key)].Dat=Dat;}
 
   void AddDatPar(const TKey& Key, const TInt& Dat) {
-    if ((KeyDatV.Len()>2*PortV.Len())||PortV.Empty()){
-      Resize();
-    }
+    //if ((KeyDatV.Len()>2*PortV.Len())||PortV.Empty()){
+    //  Resize();
+    //}
     const int PortN=abs(THashFunc::GetPrimHashCd(Key)%PortV.Len());
     const int HashCd=abs(THashFunc::GetSecHashCd(Key));
     int PrevKeyId=-1;
     int KeyId;
 
-    KeyId = PortV[PortN];
 
-    while ((KeyId!=-1) &&
-     !((KeyDatV[KeyId].HashCd==HashCd) && (KeyDatV[KeyId].Key==Key))){
-      PrevKeyId=KeyId; KeyId=KeyDatV[KeyId].Next;}
+    bool done = false;
+    while(!done) {
+      bool port_lock = false;
+      int old;
+      int *ptr = &PortLockV[PortN].Val;
 
-    if (KeyId==-1) {
-      pthread_mutex_lock(&lock);
-      KeyId = FFreeKeyId++;
-      pthread_mutex_unlock(&lock);
+      old = PortLockV[PortN];
+      if (old == -2) {
+        port_lock = false;
+      }
+      else if (__sync_bool_compare_and_swap(ptr, old, -2)) {
+        port_lock = true;
+      }
 
-      KeyDatV[KeyId].Next=-1;
-      KeyDatV[KeyId].HashCd=HashCd;
-      KeyDatV[KeyId].Key=Key;
+      KeyId = PortV[PortN];
+      while ((KeyId!=-1) &&
+          !((KeyDatV[KeyId].HashCd==HashCd) && (KeyDatV[KeyId].Key==Key))){
+        PrevKeyId=KeyId; KeyId=KeyDatV[KeyId].Next;}
 
-      int temp;
-      int* pt = &KeyDatV[KeyId].Next.Val;
-      while(true) {
-        temp = KeyDatV[KeyId].Next;
-        if (temp == -2) continue;
-        if (__sync_bool_compare_and_swap(pt, temp, -2)) {
-          KeyDatV[KeyId].Dat.Add(Dat);
-          *pt = temp;
-          break;
+      if (KeyId==-1) {
+        if (port_lock == false) continue;
+
+        pthread_mutex_lock(&lock);
+        KeyId = FFreeKeyId++;
+        pthread_mutex_unlock(&lock);
+
+        KeyDatV[KeyId].Next=-1;
+        KeyDatV[KeyId].HashCd=HashCd;
+        KeyDatV[KeyId].Key=Key;
+
+        int temp;
+        int* pt = &KeyDatV[KeyId].Next.Val;
+        while(true) {
+          temp = KeyDatV[KeyId].Next;
+          if (temp == -2) continue;
+          if (__sync_bool_compare_and_swap(pt, temp, -2)) {
+            KeyDatV[KeyId].Dat.Add(Dat);
+            *pt = temp;
+            done = true;
+            break;
+          }
         }
+        if (PrevKeyId==-1){
+          PortV[PortN] = KeyId;
+        } else {
+          KeyDatV[PrevKeyId].Next=KeyId;
+        }
+        *ptr = old;
       }
-
-      if (PrevKeyId==-1){
-        PortV[PortN] = KeyId;
-      } else {
-        KeyDatV[PrevKeyId].Next=KeyId;
-      }
-    }
-    else {
-      int temp;
-      int* pt = &KeyDatV[KeyId].Next.Val;
-      while(true) {
-        temp = KeyDatV[KeyId].Next;
-        if (temp == -2) continue;
-        if (__sync_bool_compare_and_swap(pt, temp, -2)) {
-          KeyDatV[KeyId].Dat.Add(Dat);
-          *pt = temp;
-          break;
+      else {
+        int temp;
+        int* pt = &KeyDatV[KeyId].Next.Val;
+        while(true) {
+          temp = KeyDatV[KeyId].Next;
+          if (temp == -2) continue;
+          if (__sync_bool_compare_and_swap(pt, temp, -2)) {
+            KeyDatV[KeyId].Dat.Add(Dat);
+            *pt = temp;
+            if (port_lock) *ptr = old;
+            done = true;
+            break;
+          }
         }
       }
     }
@@ -263,6 +283,7 @@ void THashPar<TKey, TDat, THashFunc>::ResizePar(int sz){
   if (PortV.Len()==0){
     PortV.Gen(sz);
     KeyDatV.Gen(sz);
+    PortLockV.Gen(sz);
   } else if (AutoSizeP&&(KeyDatV.Len()>2*PortV.Len())){
     PortV.Gen(GetNextPrime(PortV.Len()+1));
   } else {

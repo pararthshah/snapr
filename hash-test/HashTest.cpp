@@ -13,12 +13,12 @@ int main() {
   TInt sum = 0;
   for (THashPar<TInt, TIntV>::TIter it = T.BegI(); it != T.EndI(); it++) {
     TIntV V = it.GetDat();
-    //printf("%d: ", it.GetKey().Val);
+    printf("%d\n", it.GetKey().Val);
     sum += V.Len();
     //for (TInt i = 0; i < V.Len(); i++)
     //  printf("%d ", V[i].Val);
     //printf("\n");
   }
-  printf("Total number of elements inserted: %d\n", sum);
+  printf("Total number of elements inserted: %d\n", sum.Val);
   return 0;
 }
