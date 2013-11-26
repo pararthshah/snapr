@@ -3,6 +3,7 @@
 #include "predicate.h"
 #include "tmetric.h"
 //#include "snap.h"
+#include <omp.h>
 
 class TTable;
 typedef TPt<TTable> PTable;

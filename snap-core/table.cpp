@@ -1085,6 +1085,8 @@ void TTable::AddIdColumn(const TStr& ColName){
   TIntV IdCol(NumRows);
   TInt IdCnt = 0;
   for(TRowIterator RI = BegRI(); RI < EndRI(); RI++){
+    if (RI.GetRowIdx() >= NumRows) {
+    }
     IdCol[RI.GetRowIdx()] = IdCnt;
     IdCnt++;
   }
@@ -1933,15 +1935,15 @@ void TTable::AddNodeAttributes(TInt NId, TStrV NodeAttrV, TInt RowId, THash<TInt
     if (CT == atInt) {
       if(!NodeIntAttrs.IsKey(NId)){ NodeIntAttrs.AddKey(NId);}
       if(!NodeIntAttrs.GetDat(NId).IsKey(ColAttr)){ NodeIntAttrs.GetDat(NId).AddKey(ColAttr);}
-      NodeIntAttrs.GetDat(NId).GetDat(ColAttr).Add(IntCols[ColId][RowId]);
+      NodeIntAttrs.GetDat(NId).GetDat(ColAttr).Add(IntCols[ColId][RowId]); 
     } else if (CT == atFlt) {
       if(!NodeFltAttrs.IsKey(NId)){ NodeFltAttrs.AddKey(NId);}
       if(!NodeFltAttrs.GetDat(NId).IsKey(ColAttr)){ NodeFltAttrs.GetDat(NId).AddKey(ColAttr);}
-      NodeFltAttrs.GetDat(NId).GetDat(ColAttr).Add(FltCols[ColId][RowId]);
+      NodeFltAttrs.GetDat(NId).GetDat(ColAttr).Add(FltCols[ColId][RowId]); 
     } else {
       if(!NodeStrAttrs.IsKey(NId)){ NodeStrAttrs.AddKey(NId);}
       if(!NodeStrAttrs.GetDat(NId).IsKey(ColAttr)){ NodeStrAttrs.GetDat(NId).AddKey(ColAttr);}
-      NodeStrAttrs.GetDat(NId).GetDat(ColAttr).Add(GetStrVal(ColId, RowId));
+      NodeStrAttrs.GetDat(NId).GetDat(ColAttr).Add(GetStrVal(ColId, RowId)); 
     }
   }
 }
@@ -2023,15 +2025,15 @@ PNEANet TTable::BuildGraph(const TIntV& RowIds, TAttrAggr AggrPolicy) {
 
     // add edge and edge attributes 
     Graph->AddEdge(SVal, DVal, RowIds[i]);
-    AddEdgeAttributes(Graph, RowIds[i]);
+    //AddEdgeAttributes(Graph, RowIds[i]);
 
     // get src and dst node attributes into hashmaps
-    AddNodeAttributes(SVal, SrcNodeAttrV, RowIds[i], NodeIntAttrs, NodeFltAttrs, NodeStrAttrs);
-    AddNodeAttributes(DVal, DstNodeAttrV, RowIds[i], NodeIntAttrs, NodeFltAttrs, NodeStrAttrs);
+    //AddNodeAttributes(SVal, SrcNodeAttrV, RowIds[i], NodeIntAttrs, NodeFltAttrs, NodeStrAttrs);
+    //AddNodeAttributes(DVal, DstNodeAttrV, RowIds[i], NodeIntAttrs, NodeFltAttrs, NodeStrAttrs);
   }
 
   // aggregate node attributes and add to graph
-  for (TNEANet::TNodeI NodeI = Graph->BegNI(); NodeI < Graph->EndNI(); NodeI++) {
+  /*for (TNEANet::TNodeI NodeI = Graph->BegNI(); NodeI < Graph->EndNI(); NodeI++) {
     TInt NId = NodeI.GetId();
     if (NodeIntAttrs.IsKey(NId)) {
       TStrIntVH IntAttrVals = NodeIntAttrs.GetDat(NId);
@@ -2054,7 +2056,7 @@ PNEANet TTable::BuildGraph(const TIntV& RowIds, TAttrAggr AggrPolicy) {
         Graph->AddStrAttrDatN(NId, AttrVal, it.GetKey());
       }
     }
-  }
+  }*/
 
   return Graph;
 }
@@ -2144,15 +2146,25 @@ void TTable::FillBucketsByInterval(TStr SplitAttr, TIntPrV SplitIntervals) {
 }
 
 TVec<PNEANet> TTable::GetGraphsFromSequence(TAttrAggr AggrPolicy) {
+  TVec<PNEANet> GraphSequence(RowIdBuckets.Len());
+
   //call BuildGraph on each row id set - parallelizable!
-  TVec<PNEANet> GraphSequence;
+  #pragma omp parallel for schedule(dynamic)
   for (int i = 0; i < RowIdBuckets.Len(); i++) {
     if (RowIdBuckets[i].Len() == 0){ continue;}
+    //printf("Thread %d: i = %d, BucketSize = %d\n", omp_get_thread_num(), i, RowIdBuckets[i].Len());
     PNEANet PNet = BuildGraph(RowIdBuckets[i], AggrPolicy);
-    GraphSequence.Add(PNet);
+    GraphSequence[i] = PNet;
+    //printf("Thread %d: i = %d, completed\n", omp_get_thread_num(), i);
   }
 
-  return GraphSequence;
+  TVec<PNEANet> GraphSequenceCompact;
+  for (int i = 0; i < GraphSequence.Len(); i++) {
+    if (GraphSequence[i].Empty() || GraphSequence[i]->GetNodes() == 0){ continue;}
+    GraphSequenceCompact.Add(GraphSequence[i]);
+  }
+
+  return GraphSequenceCompact;
 }
 
 PNEANet TTable::GetFirstGraphFromSequence(TAttrAggr AggrPolicy) {
