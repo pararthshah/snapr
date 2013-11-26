@@ -1,3 +1,5 @@
+#ifndef HASH_PAR_H
+#define HASH_PAR_H
 #include "bd.h"
 #include "assert.h"
 
@@ -167,7 +169,6 @@ public:
         PortV[PortN] = KeyId;
       } else {
         KeyDatV[PrevKeyId].Next=KeyId;
-        PortV[PortN] = old;
       }
     }
     else {
@@ -182,7 +183,6 @@ public:
           break;
         }
       }
-      PortV[PortN] = old;
     }
   }
 
@@ -564,3 +564,5 @@ void THashPar<TKey, TDat, THashFunc>::Sort(const bool& CmpKey, const bool& Asc) 
       KeyDatV[i].Next = MapV[KeyDatV[i].Next]; }
   }
 }
+
+#endif //HASH_PAR_H
