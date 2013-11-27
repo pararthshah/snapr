@@ -345,6 +345,7 @@ protected:
   int GetEmptyRowsStart(int NewRows);
   void AddSelectedRows(const TTable& Table, const TIntV& RowIDs);
   void AddNRows(int NewRows, const TVec<TIntV>& IntColsP, const TVec<TFltV>& FltColsP, const TVec<TIntV>& StrColMapsP);
+  void AddNJointRows(const TTable& T1, const TTable& T2, const TIntPrV& RowIDs);
 
 public:
 /***** Constructors *****/
@@ -493,7 +494,7 @@ public:
   TRowIteratorWithRemove BegRIWR(){ return TRowIteratorWithRemove(FirstValidRow, this);}
   TRowIteratorWithRemove EndRIWR(){ return TRowIteratorWithRemove(TTable::Last, this);}
 
-  void GetPartitionRanges(TIntPrV& Partitions, TInt ChunksPerThread);
+  void GetPartitionRanges(TIntPrV& Partitions, TInt ChunksPerThread) const;
 
 /***** Table Operations *****/
 	// rename / add a label to a column
