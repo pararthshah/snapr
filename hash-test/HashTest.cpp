@@ -5,9 +5,9 @@ int main() {
   THashPar<TInt, TIntV> T;
   T.ResizePar(1000005);
 
-  #pragma omp parallel for num_threads(2)
+  #pragma omp parallel for num_threads(100)
   for (int i = 1; i <= 1000000; i++) {
-    T.AddDatPar(rand()%10000, rand()%100);
+    T.AddDatPar(rand()%100, rand()%100);
   }
 
   TInt sum = 0;

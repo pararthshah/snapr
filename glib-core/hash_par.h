@@ -198,17 +198,20 @@ public:
         *ptr = old;
       }
       else {
-        int temp;
+        int temp, temp1;
         int* pt = &KeyDatV[KeyId].Next.Val;
         while(true) {
           temp = KeyDatV[KeyId].Next;
-          if (temp == -2) continue;
-          if (__sync_bool_compare_and_swap(pt, temp, -2)) {
+          temp1 = __sync_val_compare_and_swap(pt, temp, -2);
+          if (temp1 == temp && temp1 != -2) {
             KeyDatV[KeyId].Dat.Add(Dat);
             *pt = temp;
             if (port_lock) *ptr = old;
             done = true;
             break;
+          }
+          else {
+            usleep(20);
           }
         }
       }
