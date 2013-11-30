@@ -790,6 +790,74 @@ void TTable::GroupAux(const TStrV& GroupBy, THash<TGroupKey, TPair<TInt, TIntV> 
 
   TVec<TPair<TInt, TInt> > GroupAndRowIds;
 
+
+  #ifdef _OPENMP
+  TIntPrV Partitions;
+  GetPartitionRanges(Partitions, 10);
+  #pragma omp parallel for schedule(dynamic, CHUNKS_PER_THREAD) 
+  for (int i = 0; i < Partitions.Len(); i++){
+    TRowIterator it(Partitions[i].GetVal1(), this);
+    TRowIterator EndI(Partitions[i].GetVal2(), this);
+    while (it < EndI) {
+      TIntV IKey(IKLen + SKLen, 0);
+      TFltV FKey(FKLen, 0);
+      TIntV SKey(SKLen, 0);
+
+      for(TInt c = 0; c < IKLen; c++){
+        IKey.Add(it.GetIntAttr(IntGroupByCols[c])); 
+      }
+      for(TInt c = 0; c < FKLen; c++){
+        FKey.Add(it.GetFltAttr(FltGroupByCols[c])); 
+      }
+      for(TInt c = 0; c < SKLen; c++){
+        SKey.Add(it.GetStrMap(StrGroupByCols[c])); 
+      }
+
+      if(!Ordered){
+        if(IKLen > 0){IKey.ISort(0, IKey.Len()-1, true);}
+        if(FKLen > 0){FKey.ISort(0, FKey.Len()-1, true);}
+        if(SKLen > 0){SKey.ISort(0, SKey.Len()-1, true);}
+      }
+      for(TInt c = 0; c < SKLen; c++){
+        IKey.Add(SKey[c]);
+      }
+
+      TGroupKey GroupKey = TGroupKey(IKey, FKey);
+
+      bool isGroupKey = Grouping.IsKey(GroupKey);
+
+      TInt RowIdx = it.GetRowIdx();
+#pragma omp critical
+      {
+        if (isGroupKey == false) {
+          TPair<TInt, TIntV> NewGroup;
+          NewGroup.Val1 = GroupNum;
+          NewGroup.Val2.Add(IntCols[IdColIdx][RowIdx]);
+          Grouping.AddDat(GroupKey, NewGroup);
+          if (GroupColName != "") {
+            GroupAndRowIds.Add(TPair<TInt, TInt>(GroupNum, RowIdx));
+          }
+          if (KeepUnique) { 
+            UniqueVec.Add(RowIdx);
+          }
+          GroupNum++;
+          isGroupKey = true;
+        }
+      }
+
+      if (isGroupKey) {
+        if (!KeepUnique) {
+          TPair<TInt, TIntV>& NewGroup = Grouping.GetDat(GroupKey);
+          NewGroup.Val2.Add(IntCols[IdColIdx][RowIdx]);
+          if (GroupColName != "") {
+            GroupAndRowIds.Add(TPair<TInt, TInt>(NewGroup.Val1, RowIdx));
+          }
+        }
+      }
+      it++;
+    }
+  }
+  #else
   // iterate over rows
   for(TRowIterator it = BegRI(); it < EndRI(); it++){
     TIntV IKey(IKLen + SKLen, 0);
@@ -843,6 +911,7 @@ void TTable::GroupAux(const TStrV& GroupBy, THash<TGroupKey, TPair<TInt, TIntV> 
       }
     }
   }
+  #endif
 
   // update group mapping
   if (!KeepUnique) {
