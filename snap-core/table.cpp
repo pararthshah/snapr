@@ -905,7 +905,13 @@ void TTable::Aggregate(const TStrV& GroupByAttrs, TAttrAggr AggOp,
   }
   TInt ColIdx = ColTypeMap.GetDat(ResAttr).Val2;
 
+  #ifdef _OPENMP
+  #pragma omp parallel for schedule(dynamic)
+  for (int i = 0; i < Mapping.Len(); i++) {
+    THash<TGroupKey, TIntV>::TIter it = Mapping.GetI(Mapping.GetKey(i));
+  #else
   for (THash<TGroupKey, TIntV>::TIter it = Mapping.BegI(); it != Mapping.EndI(); it++) {
+  #endif
     TIntV& GroupRows = it.GetDat();
     
     // find valid rows of group
