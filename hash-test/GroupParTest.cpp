@@ -19,7 +19,6 @@ int main(){
   P->SaveSS("tests/p1.txt");
 
 
-
   TStrV cols;
   cols.Add("Size");
   cols.Add("Number");

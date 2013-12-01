@@ -794,7 +794,8 @@ void TTable::GroupAux(const TStrV& GroupBy, THash<TGroupKey, TPair<TInt, TIntV> 
   #ifdef _OPENMP
   TIntPrV Partitions;
   GetPartitionRanges(Partitions, 10);
-  #pragma omp parallel for schedule(dynamic, CHUNKS_PER_THREAD) 
+  //#pragma omp parallel for schedule(dynamic, CHUNKS_PER_THREAD) 
+  #pragma omp parallel for num_threads(10)
   for (int i = 0; i < Partitions.Len(); i++){
     TRowIterator it(Partitions[i].GetVal1(), this);
     TRowIterator EndI(Partitions[i].GetVal2(), this);
@@ -824,12 +825,18 @@ void TTable::GroupAux(const TStrV& GroupBy, THash<TGroupKey, TPair<TInt, TIntV> 
 
       TGroupKey GroupKey = TGroupKey(IKey, FKey);
 
+      TInt RowIdx = it.GetRowIdx();
       bool isGroupKey = Grouping.IsKey(GroupKey);
 
-      TInt RowIdx = it.GetRowIdx();
+      if (isGroupKey) {
+        it++;
+        continue;
+      }
+
 #pragma omp critical
       {
-        if (isGroupKey == false) {
+        bool flag = Grouping.IsKey(GroupKey);
+        if (flag == false) {
           TPair<TInt, TIntV> NewGroup;
           NewGroup.Val1 = GroupNum;
           NewGroup.Val2.Add(IntCols[IdColIdx][RowIdx]);
@@ -841,19 +848,18 @@ void TTable::GroupAux(const TStrV& GroupBy, THash<TGroupKey, TPair<TInt, TIntV> 
             UniqueVec.Add(RowIdx);
           }
           GroupNum++;
-          isGroupKey = true;
         }
       }
 
-      if (isGroupKey) {
-        if (!KeepUnique) {
-          TPair<TInt, TIntV>& NewGroup = Grouping.GetDat(GroupKey);
-          NewGroup.Val2.Add(IntCols[IdColIdx][RowIdx]);
-          if (GroupColName != "") {
-            GroupAndRowIds.Add(TPair<TInt, TInt>(NewGroup.Val1, RowIdx));
-          }
-        }
-      }
+      //if (isGroupKey) {
+      //  if (!KeepUnique) {
+      //    TPair<TInt, TIntV>& NewGroup = Grouping.GetDat(GroupKey);
+      //    NewGroup.Val2.Add(IntCols[IdColIdx][RowIdx]);
+      //    if (GroupColName != "") {
+      //      GroupAndRowIds.Add(TPair<TInt, TInt>(NewGroup.Val1, RowIdx));
+      //    }
+      //  }
+      //}
       it++;
     }
   }
