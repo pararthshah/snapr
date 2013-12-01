@@ -13,6 +13,19 @@ typedef TPt<TTable> PTable;
 
 typedef TPair<TIntV, TFltV> TGroupKey;
 
+namespace TSnap {
+
+  template <class PGraph>
+  void MapPageRank(const TVec<PGraph>& GraphSeq, TVec<PTable>& TableSeq, 
+      TTableContext& Context, const TStr& TableNamePrefix,
+      const double& C, const double& Eps, const int& MaxIter);
+
+  template <class PGraph>
+  void MapHits(const TVec<PGraph>& GraphSeq, TVec<PTable>& TableSeq, 
+    TTableContext& Context, const TStr& TableNamePrefix,
+    const int& MaxIter);
+}
+
 /*
 This class serves as a wrapper for all data that needs to be shared by
 several tables in an execution context
@@ -86,6 +99,15 @@ public:
   TStr GetNextStrAttr(const TStr& Col) const;   
   TBool IsFirst() const;
   void RemoveNext();
+};
+
+class TTableIterator{
+  TVec<PTable> PTableV;
+  TInt CurrTableIdx;
+public:
+  TTableIterator(TVec<PTable>& PTableV): PTableV(PTableV), CurrTableIdx(0){}
+  PTable Next() { return PTableV[CurrTableIdx++]; }
+  bool HasNext() { return CurrTableIdx < PTableV.Len(); }
 };
 
 /* 
@@ -331,7 +353,7 @@ protected:
 
 /***** Utility functions for removing rows (not through iterator) *****/
   void RemoveFirstRow();
-  void RemoveRow(TInt RowIdx, TInt PrevIdx=-1);
+  void RemoveRow(TInt RowIdx, TInt PrevIdx);
   void RemoveRows(const TIntV& RemoveV);
   // remove all rows that are not mentioned in the SORTED vector KeepV
   void KeepSortedRows(const TIntV& KeepV);
@@ -347,6 +369,7 @@ protected:
   void AddSelectedRows(const TTable& Table, const TIntV& RowIDs);
   void AddNRows(int NewRows, const TVec<TIntV>& IntColsP, const TVec<TFltV>& FltColsP, const TVec<TIntV>& StrColMapsP);
   void AddNJointRows(const TTable& T1, const TTable& T2, const TIntPrV& RowIDs);
+  void UpdateTableForNewRow();
 
 public:
 /***** Constructors *****/
@@ -396,6 +419,7 @@ public:
   }
   // Save table schema + content into a TSV file
   void SaveSS(const TStr& OutFNm);
+  void SaveBin(const TStr& OutFNm);
   // Load table from binary. The TTableContext must be provided separately as it shared among multiple TTables and should be saved in a separate binary.
   static PTable Load(TSIn& SIn, TTableContext& Context){ return new TTable(SIn, Context);} 
   // Save table schema + content into binary. Note that TTableContext must be saved in a separate binary (as it is shared among multiple TTables).
@@ -582,6 +606,9 @@ public:
   PTable Join(const TStr& Col1, const PTable& Table, const TStr& Col2){ return Join(Col1, *Table, Col2); };
   PTable SelfJoin(const TStr& Col){return Join(Col, *this, Col);}
 
+  // select first N rows from the table
+  void SelectFirstNRows(const TInt& N);
+
 	// compute distances between elements in this->Col1 and Table->Col2 according
 	// to given metric. Store the distances in DistCol, but keep only rows where
 	// distance <= threshold
@@ -601,12 +628,16 @@ public:
   void AddTable(const TTable& T);
   
   void AddRow(const TRowIterator& RI);
+  void AddRow(const TIntV& IntVals, const TFltV& FltVals, const TStrV& StrVals);
   void GetCollidingRows(const TTable& T, THashSet<TInt>& Collisions);
   PTable UnionAll(const TTable& Table, const TStr& TableName);
   PTable Union(const TTable& Table, const TStr& TableName);
+  void UnionAllInPlace(const TTable& Table);
   PTable Intersection(const TTable& Table, const TStr& TableName);
   PTable Minus(TTable& Table, const TStr& TableName);
   PTable Union(const PTable& Table, const TStr& TableName){ return Union(*Table, TableName); };
+  PTable UnionAll(const PTable& Table, const TStr& TableName){ return UnionAll(*Table, TableName); };
+  void UnionAllInPlace(const PTable& Table){ return UnionAllInPlace(*Table); };
   PTable Intersection(const PTable& Table, const TStr& TableName){ return Intersection(*Table, TableName); };
   PTable Minus(const PTable& Table, const TStr& TableName){ return Minus(*Table, TableName); };
   PTable Project(const TStrV& ProjectCols, const TStr& TableName);
@@ -659,6 +690,8 @@ public:
 
   // add explicit row ids, initialise hash set mapping ids to physical rows
   void InitIds();
+  // reinitialize row ids
+  void Reindex();
 
   // add a column of explicit integer identifiers to the rows
   void AddIdColumn(const TStr& IdColName);
@@ -671,6 +704,24 @@ public:
   // debug print sizes of various fields of table
   void PrintSize();
 
+  // get sequence of PageRank tables
+  static TTableIterator GetMapPageRank(const TVec<PNEANet>& GraphSeq, 
+    TTableContext& Context, const TStr& TableNamePrefix = "PageRankTable",
+    const double& C = 0.85, const double& Eps = 1e-4, const int& MaxIter = 100) {
+    TVec<PTable> TableSeq(GraphSeq.Len());
+    TSnap::MapPageRank(GraphSeq, TableSeq, Context, TableNamePrefix, C, Eps, MaxIter);
+    return TTableIterator(TableSeq);
+  }
+
+  // get sequence of Hits tables
+  static TTableIterator GetMapHitsIterator(const TVec<PNEANet>& GraphSeq, 
+    TTableContext& Context, const TStr& TableNamePrefix = "HitsTable",
+    const int& MaxIter = 20) {
+    TVec<PTable> TableSeq(GraphSeq.Len());
+    TSnap::MapHits(GraphSeq, TableSeq, Context, TableNamePrefix, MaxIter);
+    return TTableIterator(TableSeq);
+  }
+
   friend class TPt<TTable>;
   friend class TRowIterator;
   friend class TRowIteratorWithRemove;
@@ -682,21 +733,48 @@ namespace TSnap {
 
   template <class PGraph>
   void MapPageRank(const TVec<PGraph>& GraphSeq, TVec<PTable>& TableSeq, 
-    TTableContext& Context, const TStr& TableNamePrefix = "PageRankTable",
-    const double& C = 0.85, const double& Eps = 1e-4, const int& MaxIter = 100) {
+    TTableContext& Context, const TStr& TableNamePrefix,
+    const double& C, const double& Eps, const int& MaxIter) {
     int NumGraphs = GraphSeq.Len();
     TableSeq.Reserve(NumGraphs, NumGraphs);
-    TIntFltH PRankH;
     #ifdef _OPENMP
-    #pragma omp parallel for private(PRankH) schedule(dynamic)
+    #pragma omp parallel for schedule(dynamic)
     #endif
     for (TInt i = 0; i < NumGraphs; i++){
+      TIntFltH PRankH;
       GetPageRank(GraphSeq[i], PRankH, C, Eps, MaxIter);
       TableSeq[i] = TTable::TableFromHashMap(TableNamePrefix + "_" + i.GetStr(), 
         PRankH, "NodeId", "PageRank", Context, false);
       //#ifdef _OPENMP
       //printf("Thread %d: i = %d, completed\n", omp_get_thread_num(), i.Val);
       //#endif
+    }
+  }
+
+  template <class PGraph>
+  void MapHits(const TVec<PGraph>& GraphSeq, TVec<PTable>& TableSeq, 
+    TTableContext& Context, const TStr& TableNamePrefix,
+    const int& MaxIter) {
+    int NumGraphs = GraphSeq.Len();
+    TableSeq.Reserve(NumGraphs, NumGraphs);
+    // this loop is parallelizable
+    for (TInt i = 0; i < NumGraphs; i++){
+      TIntFltH HubH;
+      TIntFltH AuthH;
+      GetHits(GraphSeq[i], HubH, AuthH, MaxIter);
+      PTable HubT =  TTable::TableFromHashMap("1", HubH, "NodeId", "Hub", Context, false);
+      PTable AuthT =  TTable::TableFromHashMap("2", AuthH, "NodeId", "Authority", Context, false);
+      PTable HitsT = HubT->Join("NodeId", AuthT, "NodeId");
+      HitsT->Rename("1.NodeId", "NodeId");
+      HitsT->Rename("1.Hub", "Hub");
+      HitsT->Rename("2.Authority", "Authority");
+      TStrV V = TStrV(3, 0);
+      V.Add("NodeId");
+      V.Add("Hub");
+      V.Add("Authority");
+      HitsT->ProjectInPlace(V);
+      HitsT->Name = TableNamePrefix + "_" + i.GetStr();
+      TableSeq[i] = HitsT;
     }
   }
 }
