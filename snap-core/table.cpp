@@ -606,13 +606,13 @@ void TTable::RemoveRow(TInt RowIdx, TInt PrevRowIdx) {
 }
 
 void TTable::RemoveRows(const TIntV& RemoveV){
-  for(TInt i = 0; i < RemoveV.Len(); i++){RemoveRow(RemoveV[i]);}
+  for(TInt i = 0; i < RemoveV.Len(); i++){RemoveRow(RemoveV[i], -1);}
 }
 
 // TODO: simplify using TRowIteratorWithRemove
 void TTable::KeepSortedRows(const TIntV& KeepV){
   // need to remove first rows
-  while(FirstValidRow != KeepV[0]){ RemoveRow(FirstValidRow);}
+  while(FirstValidRow != KeepV[0]){ RemoveRow(FirstValidRow, -1);}
   // at this point we know the first row will stay - i.e. FirstValidRow == KeepV[0]
   TInt KeepIdx = 1;
   TRowIterator RowI = BegRI();

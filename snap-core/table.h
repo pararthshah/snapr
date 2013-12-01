@@ -13,19 +13,6 @@ typedef TPt<TTable> PTable;
 
 typedef TPair<TIntV, TFltV> TGroupKey;
 
-namespace TSnap {
-
-  template <class PGraph>
-  void MapPageRank(const TVec<PGraph>& GraphSeq, TVec<PTable>& TableSeq, 
-      TTableContext& Context, const TStr& TableNamePrefix,
-      const double& C, const double& Eps, const int& MaxIter);
-
-  template <class PGraph>
-  void MapHits(const TVec<PGraph>& GraphSeq, TVec<PTable>& TableSeq, 
-    TTableContext& Context, const TStr& TableNamePrefix,
-    const int& MaxIter);
-}
-
 /*
 This class serves as a wrapper for all data that needs to be shared by
 several tables in an execution context
@@ -47,6 +34,19 @@ typedef enum {OP_ADD, OP_SUB, OP_MUL, OP_DIV, OP_MOD} OPS;
 
 /* a table schema is a vector of pairs <attribute name, attribute type> */
 typedef TVec<TPair<TStr, TAttrType> > Schema; 
+
+namespace TSnap {
+
+  template <class PGraph>
+  void MapPageRank(const TVec<PGraph>& GraphSeq, TVec<PTable>& TableSeq, 
+      TTableContext& Context, const TStr& TableNamePrefix,
+      const double& C, const double& Eps, const int& MaxIter);
+
+  template <class PGraph>
+  void MapHits(const TVec<PGraph>& GraphSeq, TVec<PTable>& TableSeq, 
+    TTableContext& Context, const TStr& TableNamePrefix,
+    const int& MaxIter);
+}
 
 /************* Iterator classes ************/
 // An iterator class to iterate over all currently existing rows
