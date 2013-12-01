@@ -1,4 +1,5 @@
 //#include "table.h"
+#include <cassert>
 
 TInt const TTable::Last =-1;
 TInt const TTable::Invalid =-2;
@@ -580,12 +581,13 @@ void TTable::RemoveFirstRow(){
   RowIdMap.AddDat(Old, Invalid);
 }
 
-void TTable::RemoveRow(TInt RowIdx){
+void TTable::RemoveRow(TInt RowIdx, TInt PrevRowIdx) {
   if(Next[RowIdx] == TTable::Invalid){ return;} // row was already removed
   if(RowIdx == FirstValidRow){
     RemoveFirstRow();
   } else{
     TInt i = RowIdx-1;
+    if (PrevRowIdx != -1) i = PrevRowIdx;
     while(Next[i] != RowIdx){i--;}
     if (RowIdx == LastValidRow) {
       LastValidRow = i;
@@ -608,19 +610,21 @@ void TTable::KeepSortedRows(const TIntV& KeepV){
   // at this point we know the first row will stay - i.e. FirstValidRow == KeepV[0]
   TInt KeepIdx = 1;
   TRowIterator RowI = BegRI();
+  TInt PrevRowIdx = -1;
   while(RowI < EndRI()){
     if(KeepV.Len() > KeepIdx){
       if(KeepV[KeepIdx] == Next[RowI.GetRowIdx()]){
+        PrevRowIdx = Next[RowI.GetRowIdx()];
         KeepIdx++;
         RowI++;
       } else{
-          RemoveRow(Next[RowI.GetRowIdx()]);
+        RemoveRow(Next[RowI.GetRowIdx()], PrevRowIdx);
       }
     // covered all of KeepV. remove the rest of the rows
     // current RowI.CurrRowIdx is the last element of KeepV
     } else{
       while(Next[RowI.GetRowIdx()] != Last){
-        RemoveRow(Next[RowI.GetRowIdx()]);
+        RemoveRow(Next[RowI.GetRowIdx()], PrevRowIdx);
       }
       // removed the rest of the rows. increment RowI to EndRI
       RowI++;
@@ -740,7 +744,7 @@ void TTable::Unique(const TStr& Col){
 }
 
 void TTable::Unique(const TStrV& Cols, TBool Ordered){
-  THash<TGroupKey, TPair<TInt, TIntV> > Grouping;
+  THashPar<TGroupKey, TPair<TInt, TIntV> > Grouping;
   TIntV UniqueVec;
   GroupAux(Cols, Grouping, Ordered, "", true, UniqueVec);
   KeepSortedRows(UniqueVec);
@@ -758,7 +762,7 @@ void TTable::StoreGroupCol(const TStr& GroupColName, const TVec<TPair<TInt, TInt
 }
 
 // core crouping logic
-void TTable::GroupAux(const TStrV& GroupBy, THash<TGroupKey, TPair<TInt, TIntV> >& Grouping, TBool Ordered, const TStr& GroupColName, TBool KeepUnique,
+void TTable::GroupAux(const TStrV& GroupBy, THashPar<TGroupKey, TPair<TInt, TIntV> >& Grouping, TBool Ordered, const TStr& GroupColName, TBool KeepUnique,
     TIntV& UniqueVec) {
   TIntV IntGroupByCols;
   TIntV FltGroupByCols;
@@ -790,12 +794,13 @@ void TTable::GroupAux(const TStrV& GroupBy, THash<TGroupKey, TPair<TInt, TIntV> 
 
   TVec<TPair<TInt, TInt> > GroupAndRowIds;
 
+  bool isGroupKey;
 
   #ifdef _OPENMP
   TIntPrV Partitions;
-  GetPartitionRanges(Partitions, 10);
-  //#pragma omp parallel for schedule(dynamic, CHUNKS_PER_THREAD) 
-  #pragma omp parallel for num_threads(10)
+  GetPartitionRanges(Partitions, CHUNKS_PER_THREAD);
+  //Grouping.ResizePar(1005);
+  #pragma omp parallel for schedule(dynamic, CHUNKS_PER_THREAD) private(isGroupKey)
   for (int i = 0; i < Partitions.Len(); i++){
     TRowIterator it(Partitions[i].GetVal1(), this);
     TRowIterator EndI(Partitions[i].GetVal2(), this);
@@ -826,43 +831,49 @@ void TTable::GroupAux(const TStrV& GroupBy, THash<TGroupKey, TPair<TInt, TIntV> 
       TGroupKey GroupKey = TGroupKey(IKey, FKey);
 
       TInt RowIdx = it.GetRowIdx();
-      bool isGroupKey = Grouping.IsKey(GroupKey);
 
-      if (isGroupKey) {
-        it++;
-        continue;
-      }
+      it++;
 
+      bool done = false;
+      while (!done) {
+        isGroupKey = Grouping.IsKey(GroupKey);
+        if (isGroupKey) {
+          if (!KeepUnique) {
+            //TPair<TInt, TIntV>& NewGroup = Grouping.GetDat(GroupKey);
+            TInt Num = Grouping.AddDatPar(GroupKey, IntCols[IdColIdx][RowIdx]);
 #pragma omp critical
-      {
-        bool flag = Grouping.IsKey(GroupKey);
-        if (flag == false) {
-          TPair<TInt, TIntV> NewGroup;
-          NewGroup.Val1 = GroupNum;
-          NewGroup.Val2.Add(IntCols[IdColIdx][RowIdx]);
-          Grouping.AddDat(GroupKey, NewGroup);
-          if (GroupColName != "") {
-            GroupAndRowIds.Add(TPair<TInt, TInt>(GroupNum, RowIdx));
+            {
+              if (GroupColName != "") {
+                //GroupAndRowIds.Add(TPair<TInt, TInt>(NewGroup.Val1, RowIdx));
+                GroupAndRowIds.Add(TPair<TInt, TInt>(Num, RowIdx));
+              }
+            }
           }
-          if (KeepUnique) { 
-            UniqueVec.Add(RowIdx);
+          break;
+        }
+
+#pragma omp critical 
+        {
+          isGroupKey = Grouping.IsKey(GroupKey);
+          if (!isGroupKey) {
+            TPair<TInt, TIntV> NewGroup;
+            NewGroup.Val1 = GroupNum;
+            NewGroup.Val2.Add(IntCols[IdColIdx][RowIdx]);
+            Grouping.AddDat(GroupKey, NewGroup);
+            if (GroupColName != "") {
+              GroupAndRowIds.Add(TPair<TInt, TInt>(GroupNum, RowIdx));
+            }
+            if (KeepUnique) { 
+              UniqueVec.Add(RowIdx);
+            }
+            GroupNum++;
+            done = true;
           }
-          GroupNum++;
         }
       }
-
-      //if (isGroupKey) {
-      //  if (!KeepUnique) {
-      //    TPair<TInt, TIntV>& NewGroup = Grouping.GetDat(GroupKey);
-      //    NewGroup.Val2.Add(IntCols[IdColIdx][RowIdx]);
-      //    if (GroupColName != "") {
-      //      GroupAndRowIds.Add(TPair<TInt, TInt>(NewGroup.Val1, RowIdx));
-      //    }
-      //  }
-      //}
-      it++;
     }
   }
+  UniqueVec.Sort();
   #else
   // iterate over rows
   for(TRowIterator it = BegRI(); it < EndRI(); it++){
@@ -943,7 +954,7 @@ void TTable::GroupAux(const TStrV& GroupBy, THash<TGroupKey, TPair<TInt, TIntV> 
 // grouping begins here
 void TTable::Group(const TStrV& GroupBy, const TStr& GroupColName, TBool Ordered) {
   TIntV UniqueVec;
-  THash<TGroupKey, TPair<TInt, TIntV> >Grouping;
+  THashPar<TGroupKey, TPair<TInt, TIntV> >Grouping;
   // by default, we assume we don't want unique rows
   GroupAux(GroupBy, Grouping, Ordered, GroupColName, false, UniqueVec);
 }
@@ -1099,7 +1110,7 @@ void TTable::Count(const TStr& CountColName, const TStr& Col){
 
 TVec<PTable> TTable::SpliceByGroup(const TStrV& GroupBy, TBool Ordered) {
   TIntV UniqueVec;
-  THash<TGroupKey, TPair<TInt, TIntV> >Grouping;
+  THashPar<TGroupKey, TPair<TInt, TIntV> >Grouping;
   TVec<PTable> Result;
 
   Schema NewSchema;
@@ -2740,7 +2751,7 @@ void TTable::AddTable(const TTable& T){
 // we assume that schema matches exactly (including index of id cols)
 void TTable::GetCollidingRows(const TTable& Table, THashSet<TInt>& Collisions) {
   TIntV UniqueVec;
-  THash<TGroupKey, TPair<TInt, TIntV> >Grouping;
+  THashPar<TGroupKey, TPair<TInt, TIntV> >Grouping;
   TStrV GroupBy;
 
   // indices of columns of each type

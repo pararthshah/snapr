@@ -1,3 +1,5 @@
+#include "time.h"
+
 #include "Snap.h"
 
 int main(){
@@ -18,12 +20,20 @@ int main(){
 
   P->SaveSS("tests/p1.txt");
 
-
   TStrV cols;
   cols.Add("Size");
   cols.Add("Number");
 
+  struct timeval begin, end;
+  gettimeofday(&begin, NULL);
+
   P->Unique(cols);
+  //P->Group(cols, "SizeNumberGroup");
+
+  gettimeofday(&end, NULL);
+
+  double diff = (end.tv_sec * 1000000 + end.tv_usec) - (begin.tv_sec * 1000000 + begin.tv_usec);
+  printf("Elapsed time:%.3lfs\n", diff / 1000000);
 
   P->SaveSS("tests/p3.txt");
 

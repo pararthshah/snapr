@@ -139,7 +139,7 @@ public:
   TDat& AddDat(const TKey& Key, const TDat& Dat){
     return KeyDatV[AddKey(Key)].Dat=Dat;}
 
-  void AddDatPar(const TKey& Key, const TInt& Dat) {
+  int AddDatPar(const TKey& Key, const TInt& Dat) {
     //if ((KeyDatV.Len()>2*PortV.Len())||PortV.Empty()){
     //  Resize();
     //}
@@ -147,7 +147,7 @@ public:
     const int HashCd=abs(THashFunc::GetSecHashCd(Key));
     int PrevKeyId=-1;
     int KeyId;
-
+    int Ret;
 
     bool done = false;
     while(!done) {
@@ -184,9 +184,11 @@ public:
           temp = KeyDatV[KeyId].Next;
           if (temp == -2) continue;
           if (__sync_bool_compare_and_swap(pt, temp, -2)) {
-            KeyDatV[KeyId].Dat.Add(Dat);
+            KeyDatV[KeyId].Dat.Val1 = 0;
+            KeyDatV[KeyId].Dat.Val2.Add(Dat);
             *pt = temp;
             done = true;
+	    Ret = 0;
             break;
           }
         }
@@ -204,10 +206,11 @@ public:
           temp = KeyDatV[KeyId].Next;
           temp1 = __sync_val_compare_and_swap(pt, temp, -2);
           if (temp1 == temp && temp1 != -2) {
-            KeyDatV[KeyId].Dat.Add(Dat);
+            KeyDatV[KeyId].Dat.Val2.Add(Dat);
             *pt = temp;
             if (port_lock) *ptr = old;
             done = true;
+	    Ret = KeyDatV[KeyId].Dat.Val1;
             break;
           }
           else {
@@ -216,6 +219,7 @@ public:
         }
       }
     }
+    return Ret;
   }
 
   void DelKey(const TKey& Key);

@@ -331,7 +331,7 @@ protected:
 
 /***** Utility functions for removing rows (not through iterator) *****/
   void RemoveFirstRow();
-  void RemoveRow(TInt RowIdx);
+  void RemoveRow(TInt RowIdx, TInt PrevIdx=-1);
   void RemoveRows(const TIntV& RemoveV);
   // remove all rows that are not mentioned in the SORTED vector KeepV
   void KeepSortedRows(const TIntV& KeepV);
@@ -550,7 +550,7 @@ public:
   // if KeepUnique is true, UniqueVec will be modified to contain a row from each group
   // if KeepUnique is false, then normal grouping is done and a new column is added depending on 
   // whether GroupColName is empty
-  void GroupAux(const TStrV& GroupBy, THash<TGroupKey, TPair<TInt, TIntV> >& Grouping, TBool Ordered,
+  void GroupAux(const TStrV& GroupBy, THashPar<TGroupKey, TPair<TInt, TIntV> >& Grouping, TBool Ordered,
     const TStr& GroupColName, TBool KeepUnique, TIntV& UniqueVec);
 
   // group - specify columns to group by, name of column in new table, whether to treat columns as ordered
