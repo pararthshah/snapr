@@ -261,6 +261,7 @@ TTable::TTable(const TTable& Table, const TIntV& RowIDs): Name(Table.Name), Cont
   LastValidRow = -1;
   NumRows = 0;
   NumValidRows = 0;
+  ResizeTable(RowIDs.Len());
   AddSelectedRows(Table, RowIDs);
   InitIds();
 }
@@ -653,9 +654,7 @@ void TTable::GetPartitionRanges(TIntPrV& Partitions, TInt ChunksPerThread) const
     RI++;
     currCount--;
   }
-  if (NumValidRows % PartitionSize != 0) { 
-    Partitions.Add(TIntPr(currStart, RI.GetRowIdx()));
-  }
+  Partitions.Add(TIntPr(currStart, RI.GetRowIdx()));
 }
 
 /*****  Grouping Utility functions ****/
@@ -806,7 +805,7 @@ void TTable::GroupAux(const TStrV& GroupBy, THashPar<TGroupKey, TPair<TInt, TInt
   TIntPrV Partitions;
   GetPartitionRanges(Partitions, CHUNKS_PER_THREAD);
   //Grouping.ResizePar(1005);
-  #pragma omp parallel for schedule(dynamic, CHUNKS_PER_THREAD) private(isGroupKey)
+  #pragma omp parallel for schedule(dynamic) private(isGroupKey)
   for (int i = 0; i < Partitions.Len(); i++){
     TRowIterator it(Partitions[i].GetVal1(), this);
     TRowIterator EndI(Partitions[i].GetVal2(), this);
@@ -1336,7 +1335,7 @@ PTable TTable::Join(const TStr& Col1, const TTable& Table, const TStr& Col2) {
       TIntPrV Partitions;
       TB.GetPartitionRanges(Partitions, CHUNKS_PER_THREAD);
 
-      #pragma omp parallel for schedule(dynamic, CHUNKS_PER_THREAD) 
+      #pragma omp parallel for schedule(dynamic) 
       for (int i = 0; i < Partitions.Len(); i++){
         TIntPrV JointRowIDs;
         TRowIterator RowI(Partitions[i].GetVal1(), this);
@@ -1639,7 +1638,7 @@ void TTable::SelectAtomicIntConst(const TStr& Col1, const TInt& Val2, TPredComp 
   } else{
     #ifdef _OPENMP
     TIntPrV Partitions;
-    GetPartitionRanges(Partitions, 10);
+    GetPartitionRanges(Partitions, CHUNKS_PER_THREAD);
     TVec<TIntV> SelectedRowSet(Partitions.Len());
   
     #pragma omp parallel for schedule(dynamic) shared(SelectedRowSet)
@@ -1695,7 +1694,7 @@ void TTable::SelectAtomicStrConst(const TStr& Col1, const TStr& Val2, TPredComp 
   } else{
     #ifdef _OPENMP
     TIntPrV Partitions;
-    GetPartitionRanges(Partitions, 10);
+    GetPartitionRanges(Partitions, CHUNKS_PER_THREAD);
     TVec<TIntV> SelectedRowSet(Partitions.Len());
 
     #pragma omp parallel for schedule(dynamic) shared(SelectedRowSet)
@@ -1749,10 +1748,8 @@ void TTable::SelectAtomicFltConst(const TStr& Col1, const TFlt& Val2, TPredComp 
     }
   } else{
     #ifdef _OPENMP
-    int PartitionSize = NumValidRows / (omp_get_max_threads()*10);
-    if (PartitionSize < 10) { PartitionSize = 10;}
     TIntPrV Partitions;
-    GetPartitionRanges(Partitions, 10);
+    GetPartitionRanges(Partitions, CHUNKS_PER_THREAD);
     TVec<TIntV> SelectedRowSet(Partitions.Len());
 
     #pragma omp parallel for schedule(dynamic) shared(SelectedRowSet)
