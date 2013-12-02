@@ -1617,7 +1617,7 @@ void TTable::ClassifyAtomic(const TStr& Col1, const TStr& Col2, TPredComp Cmp, c
   ClassifyAux(SelectedRows, LabelName, PositiveLabel, NegativeLabel);
 }
 
-void TTable::SelectAtomicIntConst(const TStr& Col1, const TInt& Val2, TPredComp Cmp, TIntV& SelectedRows, TBool Remove){
+void TTable::SelectAtomicIntConst(const TStr& Col1, const TInt& Val2, TPredComp Cmp, TIntV& SelectedRows, PTable& SelectedTable, TBool Remove, TBool Table){
   Assert(Cmp < SUBSTR);
   TAttrType Ty1;
   TInt ColIdx1;
@@ -1635,42 +1635,50 @@ void TTable::SelectAtomicIntConst(const TStr& Col1, const TInt& Val2, TPredComp 
         RowI++;
       }
     }
-  } else{
+  } else if (Table) {
     #ifdef _OPENMP
     TIntPrV Partitions;
     GetPartitionRanges(Partitions, CHUNKS_PER_THREAD);
-    TVec<TIntV> SelectedRowSet(Partitions.Len());
+    SelectedTable->ResizeTable(NumValidRows);
   
-    #pragma omp parallel for schedule(dynamic) shared(SelectedRowSet)
+    #pragma omp parallel for schedule(dynamic)
     for (int i = 0; i < Partitions.Len(); i++){
+      TIntV LocalSelectedRows;
       TRowIterator RowI(Partitions[i].GetVal1(), this);
       TRowIterator EndI(Partitions[i].GetVal2(), this);
       while (RowI < EndI) {
         if(TPredicate::EvalAtom(RowI.GetIntAttr(Col1), Val2, Cmp)){ 
-          SelectedRowSet[i].Add(RowI.GetRowIdx());
+          LocalSelectedRows.Add(RowI.GetRowIdx());
         }
         RowI++;
       }
+      SelectedTable->AddSelectedRows(*this, LocalSelectedRows);
       //printf("Thread %d: i = %d, start = %d, end = %d\n", omp_get_thread_num(), i,
       //  Partitions[i].GetVal1().Val, Partitions[i].GetVal2().Val);
     }
 
-    for (int i = 0; i < SelectedRowSet.Len(); i++) {
-      SelectedRows.AddV(SelectedRowSet[i]);
-    }
+    SelectedTable->ResizeTable(SelectedTable->GetNumValidRows());
+
     #else
+    for(TRowIterator RowI = BegRI(); RowI < EndRI(); RowI++){
+      if(TPredicate::EvalAtom(RowI.GetIntAttr(Col1), Val2, Cmp)){ 
+        SelectedTable->AddRow(RowI);
+      }
+    }
+    #endif
+  } else {
     for(TRowIterator RowI = BegRI(); RowI < EndRI(); RowI++){
       if(TPredicate::EvalAtom(RowI.GetIntAttr(Col1), Val2, Cmp)){ 
         SelectedRows.Add(RowI.GetRowIdx());
       }
     }
-    #endif
   }
 }
 
 void TTable::ClassifyAtomicIntConst(const TStr& Col1, const TInt& Val2, TPredComp Cmp, const TStr& LabelName, const TInt& PositiveLabel, const TInt& NegativeLabel){
   TIntV SelectedRows;
-  SelectAtomicIntConst(Col1, Val2, Cmp, SelectedRows, false);
+  PTable SelectedTable;
+  SelectAtomicIntConst(Col1, Val2, Cmp, SelectedRows, SelectedTable, false, false);
   ClassifyAux(SelectedRows, LabelName, PositiveLabel, NegativeLabel);
 }
 
@@ -3088,18 +3096,31 @@ void TTable::AddSelectedRows(const TTable& Table, const TIntV& RowIDs) {
   if (NewRows == 0) {return;}
   // this call should be thread-safe
   int start = GetEmptyRowsStart(NewRows);
-  for (TInt r = 0; r < NewRows; r++){
+
+  // If the following loop is executed in a parallel context, this function
+  // must not be called from a parallel context, since most OpenMP 
+  // implementations don't support nested parallel blocks.
+  // If this function is called from a parallel context, then the following parallel
+  // for loop will most likely be executed by a single thread only.
+  #if 0
+  #pragma omp parallel for schedule(static)
+  #endif
+  for (int r = 0; r < NewRows; r++){
+    TInt CurrRowIdx = RowIDs[r];
     for(TInt i = 0; i < Table.IntCols.Len(); i++){
-      IntCols[i][start+r] = Table.IntCols[i][RowIDs[r]];
+      IntCols[i][start+r] = Table.IntCols[i][CurrRowIdx];
     }
     for(TInt i = 0; i < Table.FltCols.Len(); i++){
-      FltCols[i][start+r] = Table.FltCols[i][RowIDs[r]];
+      FltCols[i][start+r] = Table.FltCols[i][CurrRowIdx];
     }
     for(TInt i = 0; i < Table.StrColMaps.Len(); i++){
-      StrColMaps[i][start+r] = Table.StrColMaps[i][RowIDs[r]];
+      StrColMaps[i][start+r] = Table.StrColMaps[i][CurrRowIdx];
     }
   }
-  for(TInt r = 0; r < NewRows-1; r++){
+  #if 0
+  #pragma omp parallel for schedule(static)
+  #endif
+  for(int r = 0; r < NewRows-1; r++){
     Next[start+r] = start+r+1;
   }
 }  

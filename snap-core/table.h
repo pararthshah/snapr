@@ -406,7 +406,7 @@ public:
   }
   static PTable New(const PTable Table){ return new TTable(*Table);}
   static PTable New(const PTable Table, const TStr& TableName){ PTable T = New(Table); T->Name = TableName; return T;}
-  static PTable New(const PTable Table, const TStr& TableName, const TIntV& RowIds){ PTable T = new TTable(*Table, RowIds); T->Name = TableName; return T;}
+  //static PTable New(const PTable Table, const TStr& TableName, const TIntV& RowIds){ PTable T = new TTable(*Table, RowIds); T->Name = TableName; return T;}
 
 /***** Save / Load functions *****/
   // Load table from spread sheet (TSV, CSV, etc)
@@ -547,10 +547,15 @@ public:
   }
   void ClassifyAtomic(const TStr& Col1, const TStr& Col2, TPredComp Cmp, const TStr& LabelName, const TInt& PositiveLabel = 1, const TInt& NegativeLabel = 0);
 
-  void SelectAtomicIntConst(const TStr& Col1, const TInt& Val2, TPredComp Cmp, TIntV& SelectedRows, TBool Remove = true);
+  void SelectAtomicIntConst(const TStr& Col1, const TInt& Val2, TPredComp Cmp, TIntV& SelectedRows, PTable& SelectedTable, TBool Remove = true, TBool Table = true);
   void SelectAtomicIntConst(const TStr& Col1, const TInt& Val2, TPredComp Cmp){
     TIntV SelectedRows;
-    SelectAtomicIntConst(Col1, Val2, Cmp, SelectedRows, true);
+    PTable SelectedTable;
+    SelectAtomicIntConst(Col1, Val2, Cmp, SelectedRows, SelectedTable, true, false);
+  }
+  void SelectAtomicIntConst(const TStr& Col1, const TInt& Val2, TPredComp Cmp, PTable& SelectedTable){
+    TIntV SelectedRows;
+    SelectAtomicIntConst(Col1, Val2, Cmp, SelectedRows, SelectedTable, false, true);
   }
   void ClassifyAtomicIntConst(const TStr& Col1, const TInt& Val2, TPredComp Cmp, const TStr& LabelName, const TInt& PositiveLabel = 1, const TInt& NegativeLabel = 0);
 
