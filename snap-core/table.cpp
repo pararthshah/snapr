@@ -2349,15 +2349,15 @@ PNEANet TTable::BuildGraph(const TIntV& RowIds, TAttrAggr AggrPolicy) {
     } 
 
     // add edge and edge attributes 
-    Graph->AddEdge(SVal, DVal, RowIds[i]);
-    if (EdgeAttrV.Len() > 0) {AddEdgeAttributes(Graph, RowIds[i]);}
+    Graph->AddEdge(SVal, DVal, CurrRowIdx);
+    if (EdgeAttrV.Len() > 0) {AddEdgeAttributes(Graph, CurrRowIdx);}
 
     // get src and dst node attributes into hashmaps
     if (SrcNodeAttrV.Len() > 0) {
-      AddNodeAttributes(SVal, SrcNodeAttrV, RowIds[i], NodeIntAttrs, NodeFltAttrs, NodeStrAttrs);
+      AddNodeAttributes(SVal, SrcNodeAttrV, CurrRowIdx, NodeIntAttrs, NodeFltAttrs, NodeStrAttrs);
     } 
     if (DstNodeAttrV.Len() > 0) {
-      AddNodeAttributes(DVal, DstNodeAttrV, RowIds[i], NodeIntAttrs, NodeFltAttrs, NodeStrAttrs);
+      AddNodeAttributes(DVal, DstNodeAttrV, CurrRowIdx, NodeIntAttrs, NodeFltAttrs, NodeStrAttrs);
     }
   }
 
