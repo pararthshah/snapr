@@ -368,7 +368,7 @@ protected:
   int GetEmptyRowsStart(int NewRows);
   void AddSelectedRows(const TTable& Table, const TIntV& RowIDs);
   void AddNRows(int NewRows, const TVec<TIntV>& IntColsP, const TVec<TFltV>& FltColsP, const TVec<TIntV>& StrColMapsP);
-  void AddNJointRows(const TTable& T1, const TTable& T2, const TIntPrV& RowIDs);
+  void AddNJointRows(const TTable& T1, const TTable& T2, const TVec<TIntPrV>& JointRowIDSet);
   void UpdateTableForNewRow();
 
 public:
