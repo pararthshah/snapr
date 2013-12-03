@@ -20,5 +20,25 @@ int main() {
     //printf("\n");
   }
   printf("Total number of elements inserted: %d\n", sum.Val);
+
+  THashPar<TInt, TInt> Q;
+  Q.ResizePar(1005);
+
+  #pragma omp parallel for num_threads(100)
+  for (int i = 1; i <= 1000000; i++) {
+    Q.AddKeyPar(rand()%100);
+  }
+
+  int s = 0;
+  for (THashPar<TInt, TInt>::TIter it = Q.BegI(); it != Q.EndI(); it++) {
+    printf("%d\n", it.GetKey().Val);
+    s += 1;
+    //for (QInt i = 0; i < V.Val2.Len(); i++)
+    //  printf("%d ", V.Val2[i].Val);
+    //printf("\n");
+  }
+  printf("Total number of keys added: %d\n", s);
+
+  
   return 0;
 }
