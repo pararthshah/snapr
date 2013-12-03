@@ -1639,11 +1639,13 @@ void TTable::SelectAtomicIntConst(const TStr& Col1, const TInt& Val2, TPredComp 
     #ifdef _OPENMP
     TIntPrV Partitions;
     GetPartitionRanges(Partitions, CHUNKS_PER_THREAD);
+    TInt PartitionSize = Partitions[0].GetVal2()-Partitions[0].GetVal1()+1;
     SelectedTable->ResizeTable(NumValidRows);
   
     #pragma omp parallel for schedule(dynamic)
     for (int i = 0; i < Partitions.Len(); i++){
       TIntV LocalSelectedRows;
+      LocalSelectedRows.Reserve(PartitionSize);
       TRowIterator RowI(Partitions[i].GetVal1(), this);
       TRowIterator EndI(Partitions[i].GetVal2(), this);
       while (RowI < EndI) {
