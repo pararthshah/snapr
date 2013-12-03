@@ -133,6 +133,7 @@ public:
   bool IsKeyIdEqKeyN() const {return FreeKeys==0;}
 
   int AddKey(const TKey& Key);
+  int AddKeyPar(const TKey& Key);
   TDat& AddDatId(const TKey& Key){
     int KeyId=AddKey(Key); return KeyDatV[KeyId].Dat=KeyId;}
   TDat& AddDat(const TKey& Key){return KeyDatV[AddKey(Key)].Dat;}
@@ -373,7 +374,7 @@ void THashPar<TKey, TDat, THashFunc>::Clr(const bool& DoDel, const int& NoDelLim
 
 template<class TKey, class TDat, class THashFunc>
 int THashPar<TKey, TDat, THashFunc>::AddKey(const TKey& Key){
-  if ((KeyDatV.Len()>2*PortV.Len())||PortV.Empty()){Resize();}
+  //if ((KeyDatV.Len()>2*PortV.Len())||PortV.Empty()){Resize();}
   const int PortN=abs(THashFunc::GetPrimHashCd(Key)%PortV.Len());
   const int HashCd=abs(THashFunc::GetSecHashCd(Key));
   int PrevKeyId=-1;
@@ -400,6 +401,61 @@ int THashPar<TKey, TDat, THashFunc>::AddKey(const TKey& Key){
     }
   }
   return KeyId;
+}
+
+template<class TKey, class TDat, class THashFunc>
+int THashPar<TKey, TDat, THashFunc>::AddKeyPar(const TKey& Key){
+    //if ((KeyDatV.Len()>2*PortV.Len())||PortV.Empty()){
+    //  Resize();
+    //}
+    const int PortN=abs(THashFunc::GetPrimHashCd(Key)%PortV.Len());
+    const int HashCd=abs(THashFunc::GetSecHashCd(Key));
+    int PrevKeyId=-1;
+    int KeyId;
+
+    bool done = false;
+    while(!done) {
+      bool port_lock = false;
+      int old;
+      int *ptr = &PortLockV[PortN].Val;
+
+      old = PortLockV[PortN];
+      if (old == -2) {
+        port_lock = false;
+      }
+      else if (__sync_bool_compare_and_swap(ptr, old, -2)) {
+        port_lock = true;
+      }
+
+      KeyId = PortV[PortN];
+      while ((KeyId!=-1) &&
+          !((KeyDatV[KeyId].HashCd==HashCd) && (KeyDatV[KeyId].Key==Key))){
+        PrevKeyId=KeyId; KeyId=KeyDatV[KeyId].Next;}
+
+      if (KeyId==-1) {
+        if (port_lock == false) continue;
+
+        volatile unsigned int *p = (volatile unsigned int *)&FFreeKeyId.Val;
+        KeyId = __sync_fetch_and_add(p, 1);
+
+        KeyDatV[KeyId].Next=-1;
+        KeyDatV[KeyId].HashCd=HashCd;
+        KeyDatV[KeyId].Key=Key;
+
+        if (PrevKeyId==-1){
+          PortV[PortN] = KeyId;
+        } else {
+          KeyDatV[PrevKeyId].Next=KeyId;
+        }
+
+        *ptr = old;
+        done = true;
+      }
+      else {
+        done = true;
+      }
+    }
+    return KeyId;
 }
 
 template<class TKey, class TDat, class THashFunc>
