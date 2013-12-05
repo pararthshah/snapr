@@ -426,14 +426,9 @@ void TTable::Save(TSOut& SOut){
   SOut.Flush();
 }
 
-void TTable::AddStrVal(const TInt ColIdx, const TStr& Val){
-  TInt Key = Context.StringVals.GetKeyId(Val);
-  if(Key != -1){
-    StrColMaps[ColIdx].Add(Key);
-  } else{
-    Key = Context.StringVals.AddKey(Val);
-    StrColMaps[ColIdx].Add(Key);
-  }
+void TTable::AddStrVal(const TInt& ColIdx, const TStr& Val){
+  TInt Key = TInt(Context.StringVals.AddKey(Val));
+  StrColMaps[ColIdx].Add(Key);
 }
 
 void TTable::AddStrVal(const TStr& Col, const TStr& Val){
@@ -1008,6 +1003,10 @@ void TTable::Aggregate(const TStrV& GroupByAttrs, TAttrAggr AggOp,
     // find valid rows of group
     TIntV ValidRows;
     for (TInt i = 0; i < GroupRows.Len(); i++) {
+      if (!RowIdMap.IsKey(GroupRows[i])) {
+        // TODO: This should not be necessary, there is a bug to fix
+        continue;
+      }
       TInt RowId = RowIdMap.GetDat(GroupRows[i]);
       // GroupRows has physical row indices
       if (RowId != Invalid) {
@@ -2646,6 +2645,10 @@ PNEANet TTable::NextGraphIterator(){
   return GetNextGraphFromSequence();
 }
 
+TBool TTable::IsLastGraphOfSequence() {
+  return CurrBucket >= RowIdBuckets.Len() - 1;
+}
+
 PTable TTable::GetNodeTable(const PNEANet& Network, const TStr& TableName, TTableContext& Context){
   Schema SR;
   SR.Add(TPair<TStr,TAttrType>("node_id",atInt));
@@ -2877,14 +2880,14 @@ void TTable::AddTable(const TTable& T){
 
   TIntV TNext(T.Next);
   for(TInt i = 0; i < TNext.Len(); i++){
-    if(TNext[i] != Last && TNext[i] != TTable::Invalid){ TNext[i] += NumRows;}
+    if(TNext[i] != Last && TNext[i] != Invalid){ TNext[i] += NumRows;}
   }
 
+  Next.AddV(TNext);
   // checks if table is empty 
   if (LastValidRow >= 0) {
-    Next[LastValidRow] = T.FirstValidRow + NumRows;
+    Next[LastValidRow] = NumRows + T.FirstValidRow;
   }
-  Next.AddV(TNext);
   LastValidRow = NumRows + T.LastValidRow;
   NumRows += T.NumRows;
   NumValidRows += T.NumValidRows;
@@ -2965,40 +2968,57 @@ void TTable::GetCollidingRows(const TTable& Table, THashSet<TInt>& Collisions) {
   }
 }
 
-void TTable::AddIntVCol(const TStr& ColName, const TIntV& ColVals){
+void TTable::StoreIntCol(const TStr& ColName, const TIntV& ColVals){
   if(ColVals.Len() != NumRows){
     printf("new column dimension must agree with number of rows\n");
     return;
   }
   AddSchemaCol(ColName, atInt);
-  IntCols.Add(TIntV(ColVals));
+  IntCols.Add(TIntV(NumRows));
+  TInt ColIdx = IntCols.Len()-1;
+  TInt i = 0;
+  for(TRowIterator RI = BegRI(); RI < EndRI(); RI++){
+    IntCols[ColIdx][RI.GetRowIdx()] = ColVals[i];
+    i++;
+  }
   TInt L = IntCols.Len();
   ColTypeMap.AddDat(ColName, TPair<TAttrType,TInt>(atInt, L-1));
 }
 
-void TTable::AddFltVCol(const TStr& ColName, const TFltV& ColVals){
+void TTable::StoreFltCol(const TStr& ColName, const TFltV& ColVals){
   if(ColVals.Len() != NumRows){
     printf("new column dimension must agree with number of rows\n");
     return;
   }
   AddSchemaCol(ColName, atFlt);
-  FltCols.Add(TFltV(ColVals));
+  FltCols.Add(TFltV(NumRows));
+  TInt ColIdx = FltCols.Len()-1;
+  TInt i = 0;
+  for(TRowIterator RI = BegRI(); RI < EndRI(); RI++){
+    FltCols[ColIdx][RI.GetRowIdx()] = ColVals[i];
+    i++;
+  }
   TInt L = FltCols.Len();
   ColTypeMap.AddDat(ColName, TPair<TAttrType,TInt>(atFlt, L-1));
 }
 
-void TTable::AddStrVCol(const TStr& ColName, const TStrV& ColVals){
+void TTable::StoreStrCol(const TStr& ColName, const TStrV& ColVals){
   if(ColVals.Len() != NumRows){
     printf("new column dimension must agree with number of rows\n");
     return;
   }
   AddSchemaCol(ColName, atStr);
   StrColMaps.Add(TIntV(NumRows,0));
+  TInt ColIdx = FltCols.Len()-1;
+  TInt i = 0;
+  for(TRowIterator RI = BegRI(); RI < EndRI(); RI++){
+    TInt Key = Context.StringVals.GetKeyId(ColVals[i]);
+    if(Key == -1){ Context.StringVals.AddKey(ColVals[i]);}
+    StrColMaps[ColIdx][RI.GetRowIdx()] = Key;
+    i++;
+  }
   TInt L = StrColMaps.Len();
   ColTypeMap.AddDat(ColName, TPair<TAttrType,TInt>(atStr, L-1));
-  for(TInt i = 0; i < ColVals.Len(); i++){
-    AddStrVal(L-1, ColVals[i]);
-  }
 }
 
 void TTable::UpdateTableForNewRow(){
@@ -3046,7 +3066,6 @@ void TTable::AddRow(const TIntV& IntVals, const TFltV& FltVals, const TStrV& Str
   for (TInt c = 0; c < StrVals.Len(); c++){
     AddStrVal(c, StrVals[c]);
   }
-
   UpdateTableForNewRow();
 }
 
@@ -3665,7 +3684,7 @@ void TTable::ProjectInPlace(const TStrV& ProjectCols){
   // Delete the column vectors
   for(TInt i = S.Len() - 1; i >= 0; i--){
     TStr ColName = GetSchemaColName(i);
-    if (ProjectColsSet.IsKey(ColName)){ continue;}
+    if (ProjectColsSet.IsKey(ColName) || ColName == IdColName){ continue;}
     TAttrType ColType = GetSchemaColType(i);
     TInt ColId = GetColIdx(ColName);
     switch(ColType){
@@ -3688,7 +3707,7 @@ void TTable::ProjectInPlace(const TStrV& ProjectCols){
   ColTypeMap.Clr();
   for(TInt i = 0; i < S.Len(); i++){
     TStr ColName = GetSchemaColName(i);
-    if (!ProjectColsSet.IsKey(ColName)){ continue;}
+    if (!ProjectColsSet.IsKey(ColName) && ColName != IdColName){ continue;}
     TAttrType ColType = GetSchemaColType(i);
     switch(ColType){
       case atInt:
@@ -3709,8 +3728,7 @@ void TTable::ProjectInPlace(const TStrV& ProjectCols){
   // Update schema
   for (TInt i = S.Len() - 1; i >= 0; i--){
     TStr ColName = GetSchemaColName(i);
-    if (ProjectColsSet.IsKey(ColName)){ continue;}
+    if (ProjectColsSet.IsKey(ColName) || ColName == IdColName){ continue;}
     S.Del(i);
   }
-  InitIds();
 }
