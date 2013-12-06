@@ -2547,6 +2547,9 @@ PUNGraph TTable::ToGraphUndirected(TAttrAggr AggrPolicy) {
 
   // make single pass over all rows in the table
   if (NodeType == atInt) {
+    #ifdef _OPENMP
+    #pragma omp parallel for schedule(dynamic) num_threads(2)
+    #endif
     for (int CurrRowIdx = 0; CurrRowIdx < Next.Len(); CurrRowIdx++) {
       if (Next[CurrRowIdx] == Invalid) {continue;}
       // add src and dst nodes to graph if they are not seen earlier
@@ -2560,6 +2563,9 @@ PUNGraph TTable::ToGraphUndirected(TAttrAggr AggrPolicy) {
     // node values - i.e. the unique values of src/dst col
     //THashSet<TInt> IntNodeVals; // for both int and string node attr types.
     THash<TFlt, TInt> FltNodeVals;
+    #ifdef _OPENMP
+    #pragma omp parallel for schedule(dynamic)
+    #endif
     for (int CurrRowIdx = 0; CurrRowIdx < Next.Len(); CurrRowIdx++) {
       if (Next[CurrRowIdx] == Invalid) {continue;}
       // add src and dst nodes to graph if they are not seen earlier
@@ -2571,18 +2577,30 @@ PUNGraph TTable::ToGraphUndirected(TAttrAggr AggrPolicy) {
       Graph->AddEdge(SVal, DVal);
     }  
   } else {
+    #ifdef _OPENMP
+    #pragma omp parallel for schedule(dynamic)
+    #endif
     for (int CurrRowIdx = 0; CurrRowIdx < Next.Len(); CurrRowIdx++) {
       if (Next[CurrRowIdx] == Invalid) {continue;}
       // add src and dst nodes to graph if they are not seen earlier
       TInt SVal = StrColMaps[SrcColIdx][CurrRowIdx];
-      if(strlen(Context.StringVals.GetKey(SVal)) == 0){ continue;}  //illegal value
+      //if(strlen(Context.StringVals.GetKey(SVal)) == 0){ continue;}  //illegal value
       TInt DVal = StrColMaps[DstColIdx][CurrRowIdx];
-      if(strlen(Context.StringVals.GetKey(DVal)) == 0){ continue;}  //illegal value
+      //if(strlen(Context.StringVals.GetKey(DVal)) == 0){ continue;}  //illegal value
       Graph->AddNode(SVal);
       Graph->AddNode(DVal);
       Graph->AddEdge(SVal, DVal);
     }  
   }
+  //if (NodeType == atInt) {
+  //  for (int CurrRowIdx = 0; CurrRowIdx < Next.Len(); CurrRowIdx++) {
+  //    if (Next[CurrRowIdx] == Invalid) {continue;}
+  //    	TInt SVal = IntCols[SrcColIdx][CurrRowIdx];
+  //    	TInt DVal = IntCols[DstColIdx][CurrRowIdx];
+  //    	Graph->AddEdgeUnchecked(SVal, DVal);
+  //  }
+  //}
+
   printf("add done\n");
   Graph->SortNodeAdjV();
   printf("sort done\n");

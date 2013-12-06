@@ -252,8 +252,8 @@ bool TPHash<TKey, TDat, THashFunc>::operator==(const TPHash& Hash) const {
 
 template<class TKey, class TDat, class THashFunc>
 int TPHash<TKey, TDat, THashFunc>::AddKey(const TKey& Key) {
-  int CurVals = __sync_fetch_and_add(&NumVals.Val, 1);
-  IAssertR(CurVals < Table.Len(), "Table must not be full");
+  //int CurVals = __sync_fetch_and_add(&NumVals.Val, 1);
+  //IAssertR(CurVals < Table.Len(), "Table must not be full");
 
   const int BegTableN=abs(Key.GetPrimHashCd()%Table.Len());
   const int HashCd=abs(Key.GetSecHashCd());

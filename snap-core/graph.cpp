@@ -20,10 +20,11 @@ int TUNGraph::AddNode(int NId) {
 int TUNGraph::AddNodeUnchecked(int NId) {
   if (IsNode(NId)) { return -1;}
   MxNId = TMath::Mx(NId+1, MxNId());
+  //MxNId = 70000000;
   NodeH.AddDat(NId, TNode(NId));
   return NId;
 }
-
+ 
 // Add a node of ID NId to the graph and create edges to all nodes in vector NbrNIdV.
 int TUNGraph::AddNode(const int& NId, const TIntV& NbrNIdV) {
   int NewNId;
@@ -98,6 +99,7 @@ int TUNGraph::AddEdge(const int& SrcNId, const int& DstNId) {
 
 // Add an edge between SrcNId and DstNId to the graph.
 int TUNGraph::AddEdgeUnchecked(const int& SrcNId, const int& DstNId) {
+  return -1;
   GetNode(SrcNId).NIdV.Add(DstNId);
   if (SrcNId!=DstNId) { // not a self edge
     GetNode(DstNId).NIdV.Add(SrcNId); }
