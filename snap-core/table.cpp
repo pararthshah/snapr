@@ -2542,8 +2542,9 @@ PUNGraph TTable::ToGraphUndirected(TAttrAggr AggrPolicy) {
   Assert(NodeType == GetColType(DstCol));
   const TInt SrcColIdx = GetColIdx(SrcCol);
   const TInt DstColIdx = GetColIdx(DstCol);
-  
+
   printf("add start\n");
+
   // make single pass over all rows in the table
   if (NodeType == atInt) {
     for (int CurrRowIdx = 0; CurrRowIdx < Next.Len(); CurrRowIdx++) {

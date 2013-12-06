@@ -113,9 +113,13 @@ private:
 //  void Resize();
 public:
   TPHash():
-    Table(), NumVals(0){}
+    Table(), NumVals(0){
+    Gen(70000000);
+}
   TPHash(const TPHash& PHash):
-    Table(PHash.Table), NumVals(PHash.NumVals){}
+    Table(PHash.Table), NumVals(PHash.NumVals){
+    Gen(70000000);
+  }
   explicit TPHash(const int& ExpectVals) {
     Gen(ExpectVals);}
   explicit TPHash(TSIn& SIn):
