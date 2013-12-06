@@ -99,7 +99,7 @@ TUNGraphMtx::TUNGraphMtx(const PUNGraph& GraphPt) : Graph() {
 void TUNGraphMtx::PMultiply(const TFltVV& B, int ColId, TFltV& Result) const {
   const int RowN = GetRows();
   Assert(B.GetRows() >= RowN && Result.Len() >= RowN);
-  const THash<TInt, TUNGraph::TNode>& NodeH = Graph->NodeH;
+  const TPHash<TInt, TUNGraph::TNode>& NodeH = Graph->NodeH;
   for (int j = 0; j < RowN; j++) {
     const TIntV& RowV = NodeH[j].NIdV;
     Result[j] = 0.0;
@@ -113,7 +113,7 @@ void TUNGraphMtx::PMultiply(const TFltVV& B, int ColId, TFltV& Result) const {
 void TUNGraphMtx::PMultiply(const TFltV& Vec, TFltV& Result) const {
   const int RowN = GetRows();
   Assert(Vec.Len() >= RowN && Result.Len() >= RowN);
-  const THash<TInt, TUNGraph::TNode>& NodeH = Graph->NodeH;
+  const TPHash<TInt, TUNGraph::TNode>& NodeH = Graph->NodeH;
   for (int j = 0; j < RowN; j++) {
     const TIntV& RowV = NodeH[j].NIdV;
     Result[j] = 0.0;
@@ -127,7 +127,7 @@ void TUNGraphMtx::PMultiply(const TFltV& Vec, TFltV& Result) const {
 void TUNGraphMtx::PMultiplyT(const TFltVV& B, int ColId, TFltV& Result) const {
   const int ColN = GetCols();
   Assert(B.GetRows() >= ColN && Result.Len() >= ColN);
-  const THash<TInt, TUNGraph::TNode>& NodeH = Graph->NodeH;
+  const TPHash<TInt, TUNGraph::TNode>& NodeH = Graph->NodeH;
   for (int i = 0; i < ColN; i++) Result[i] = 0.0;
   for (int j = 0; j < ColN; j++) {
     const TIntV& RowV = NodeH[j].NIdV;
@@ -141,7 +141,7 @@ void TUNGraphMtx::PMultiplyT(const TFltVV& B, int ColId, TFltV& Result) const {
 void TUNGraphMtx::PMultiplyT(const TFltV& Vec, TFltV& Result) const {
   const int RowN = GetRows();
   Assert(Vec.Len() >= RowN && Result.Len() >= RowN);
-  const THash<TInt, TUNGraph::TNode>& NodeH = Graph->NodeH;
+  const TPHash<TInt, TUNGraph::TNode>& NodeH = Graph->NodeH;
   for (int i = 0; i < RowN; i++) Result[i] = 0.0;
   for (int j = 0; j < RowN; j++) {
     const TIntV& RowV = NodeH[j].NIdV;

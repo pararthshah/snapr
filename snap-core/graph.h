@@ -56,11 +56,11 @@ public:
   /// Node iterator. Only forward iteration (operator++) is supported.
   class TNodeI {
   private:
-    typedef THash<TInt, TNode>::TIter THashIter;
-    THashIter NodeHI;
+    typedef TPHash<TInt, TNode>::TIter TPHashIter;
+    TPHashIter NodeHI;
   public:
     TNodeI() : NodeHI() { }
-    TNodeI(const THashIter& NodeHIter) : NodeHI(NodeHIter) { }
+    TNodeI(const TPHashIter& NodeHIter) : NodeHI(NodeHIter) { }
     TNodeI(const TNodeI& NodeI) : NodeHI(NodeI.NodeHI) { }
     TNodeI& operator = (const TNodeI& NodeI) { NodeHI = NodeI.NodeHI; return *this; }
 
@@ -119,7 +119,7 @@ public:
 private:
   TCRef CRef;
   TInt MxNId, NEdges;
-  THash<TInt, TNode> NodeH;
+  TPHash<TInt, TNode> NodeH;
 private:
   TNode& GetNode(const int& NId) { return NodeH.GetDat(NId); }
   const TNode& GetNode(const int& NId) const { return NodeH.GetDat(NId); }

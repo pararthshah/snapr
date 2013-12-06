@@ -62,18 +62,18 @@ int TUNGraph::AddNode(const int& NId, const TVecPool<TInt>& Pool, const int& NId
 
 // Delete node of ID NId from the graph.
 void TUNGraph::DelNode(const int& NId) {
-  { AssertR(IsNode(NId), TStr::Fmt("NodeId %d does not exist", NId));
-  TNode& Node = GetNode(NId);
-  NEdges -= Node.GetDeg();
-  for (int e = 0; e < Node.GetDeg(); e++) {
-    const int nbr = Node.GetNbrNId(e);
-    if (nbr == NId) { continue; }
-    TNode& N = GetNode(nbr);
-    const int n = N.NIdV.SearchBin(NId);
-    IAssert(n != -1); // if NId points to N, then N also should point back
-    if (n!= -1) { N.NIdV.Del(n); }
-  } }
-  NodeH.DelKey(NId);
+ // { AssertR(IsNode(NId), TStr::Fmt("NodeId %d does not exist", NId));
+ // TNode& Node = GetNode(NId);
+ // NEdges -= Node.GetDeg();
+ // for (int e = 0; e < Node.GetDeg(); e++) {
+ //   const int nbr = Node.GetNbrNId(e);
+ //   if (nbr == NId) { continue; }
+ //   TNode& N = GetNode(nbr);
+ //   const int n = N.NIdV.SearchBin(NId);
+ //   IAssert(n != -1); // if NId points to N, then N also should point back
+ //   if (n!= -1) { N.NIdV.Del(n); }
+ // } }
+ // NodeH.DelKey(NId);
 }
 
 int TUNGraph::GetEdges() const {
@@ -143,12 +143,12 @@ void TUNGraph::GetNIdV(TIntV& NIdV) const {
 
 // Defragment the graph.
 void TUNGraph::Defrag(const bool& OnlyNodeLinks) {
-  for (int n = NodeH.FFirstKeyId(); NodeH.FNextKeyId(n); ) {
-    NodeH[n].NIdV.Pack();
-  }
-  if (! OnlyNodeLinks && ! NodeH.IsKeyIdEqKeyN()) {
-    NodeH.Defrag();
-  }
+ // for (int n = NodeH.FFirstKeyId(); NodeH.FNextKeyId(n); ) {
+ //   NodeH[n].NIdV.Pack();
+ // }
+ // if (! OnlyNodeLinks && ! NodeH.IsKeyIdEqKeyN()) {
+ //   NodeH.Defrag();
+ // }
 }
 
 // Check the graph data structure for internal consistency.

@@ -2,15 +2,15 @@
 #define HASH_PAR_H
 #include "bd.h"
 
-inline unsigned int __sync_fetch_and_add(volatile unsigned int* p, unsigned int incr)
-{
-    unsigned int result;
-    asm volatile("lock; xadd %0, %1" :
-            "=r"(result), "=m"(*p):
-            "0"(incr), "m"(*p) :
-            "memory");
-    return result + 1;
-}
+//inline unsigned int __sync_fetch_and_add(volatile unsigned int* p, unsigned int incr)
+//{
+//    unsigned int result;
+//    asm volatile("lock; xadd %0, %1" :
+//            "=r"(result), "=m"(*p):
+//            "0"(incr), "m"(*p) :
+//            "memory");
+//    return result + 1;
+//}
 
 /////////////////////////////////////////////////
 // Hash-Table

@@ -168,6 +168,7 @@
 #include "bits.h"
 #include "hash.h"
 #include "hash_par.h"
+#include "phash.h"
 #include "xml.h"
 
 #include "xmath.h"
