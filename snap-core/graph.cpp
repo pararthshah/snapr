@@ -279,22 +279,22 @@ int TNGraph::AddNode(const int& NId, const TVecPool<TInt>& Pool, const int& SrcV
 }
 
 void TNGraph::DelNode(const int& NId) {
-  { TNode& Node = GetNode(NId);
-  for (int e = 0; e < Node.GetOutDeg(); e++) {
-  const int nbr = Node.GetOutNId(e);
-  if (nbr == NId) { continue; }
-    TNode& N = GetNode(nbr);
-    const int n = N.InNIdV.SearchBin(NId);
-    if (n!= -1) { N.InNIdV.Del(n); }
-  }
-  for (int e = 0; e < Node.GetInDeg(); e++) {
-  const int nbr = Node.GetInNId(e);
-  if (nbr == NId) { continue; }
-    TNode& N = GetNode(nbr);
-    const int n = N.OutNIdV.SearchBin(NId);
-    if (n!= -1) { N.OutNIdV.Del(n); }
-  } }
-  NodeH.DelKey(NId);
+ // { TNode& Node = GetNode(NId);
+ // for (int e = 0; e < Node.GetOutDeg(); e++) {
+ // const int nbr = Node.GetOutNId(e);
+ // if (nbr == NId) { continue; }
+ //   TNode& N = GetNode(nbr);
+ //   const int n = N.InNIdV.SearchBin(NId);
+ //   if (n!= -1) { N.InNIdV.Del(n); }
+ // }
+ // for (int e = 0; e < Node.GetInDeg(); e++) {
+ // const int nbr = Node.GetInNId(e);
+ // if (nbr == NId) { continue; }
+ //   TNode& N = GetNode(nbr);
+ //   const int n = N.OutNIdV.SearchBin(NId);
+ //   if (n!= -1) { N.OutNIdV.Del(n); }
+ // } }
+ // NodeH.DelKey(NId);
 }
 
 int TNGraph::GetEdges() const {
@@ -358,11 +358,11 @@ void TNGraph::GetNIdV(TIntV& NIdV) const {
 }
 
 void TNGraph::Defrag(const bool& OnlyNodeLinks) {
-  for (int n = NodeH.FFirstKeyId(); NodeH.FNextKeyId(n); ) {
-    TNode& Node = NodeH[n];
-    Node.InNIdV.Pack();  Node.OutNIdV.Pack();
-  }
-  if (! OnlyNodeLinks && ! NodeH.IsKeyIdEqKeyN()) { NodeH.Defrag(); }
+  //for (int n = NodeH.FFirstKeyId(); NodeH.FNextKeyId(n); ) {
+  //  TNode& Node = NodeH[n];
+  //  Node.InNIdV.Pack();  Node.OutNIdV.Pack();
+  //}
+  //if (! OnlyNodeLinks && ! NodeH.IsKeyIdEqKeyN()) { NodeH.Defrag(); }
 }
 
 // for each node check that their neighbors are also nodes

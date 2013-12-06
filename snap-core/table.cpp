@@ -2548,7 +2548,7 @@ PUNGraph TTable::ToGraphUndirected(TAttrAggr AggrPolicy) {
   // make single pass over all rows in the table
   if (NodeType == atInt) {
     #ifdef _OPENMP
-    #pragma omp parallel for schedule(dynamic) num_threads(2)
+    #pragma omp parallel for schedule(dynamic, 10000)
     #endif
     for (int CurrRowIdx = 0; CurrRowIdx < Next.Len(); CurrRowIdx++) {
       if (Next[CurrRowIdx] == Invalid) {continue;}
@@ -2557,7 +2557,10 @@ PUNGraph TTable::ToGraphUndirected(TAttrAggr AggrPolicy) {
       TInt DVal = IntCols[DstColIdx][CurrRowIdx];
       Graph->AddNodeUnchecked(SVal);
       Graph->AddNodeUnchecked(DVal);
+//#pragma omp critical
+//{
       Graph->AddEdgeUnchecked(SVal, DVal);
+//}
     }
   } else if (NodeType == atFlt) {
     // node values - i.e. the unique values of src/dst col

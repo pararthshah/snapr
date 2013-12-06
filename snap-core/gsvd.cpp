@@ -19,7 +19,7 @@ TNGraphMtx::TNGraphMtx(const PNGraph& GraphPt) : Graph() {
 void TNGraphMtx::PMultiply(const TFltVV& B, int ColId, TFltV& Result) const {
   const int RowN = GetRows();
   Assert(B.GetRows() >= RowN && Result.Len() >= RowN);
-  const THash<TInt, TNGraph::TNode>& NodeH = Graph->NodeH;
+  const TPHash<TInt, TNGraph::TNode>& NodeH = Graph->NodeH;
   for (int j = 0; j < RowN; j++) {
     const TIntV& RowV = NodeH[j].OutNIdV;
     Result[j] = 0.0;
@@ -33,7 +33,7 @@ void TNGraphMtx::PMultiply(const TFltVV& B, int ColId, TFltV& Result) const {
 void TNGraphMtx::PMultiply(const TFltV& Vec, TFltV& Result) const {
   const int RowN = GetRows();
   Assert(Vec.Len() >= RowN && Result.Len() >= RowN);
-  const THash<TInt, TNGraph::TNode>& NodeH = Graph->NodeH;
+  const TPHash<TInt, TNGraph::TNode>& NodeH = Graph->NodeH;
   for (int j = 0; j < RowN; j++) {
     const TIntV& RowV = NodeH[j].OutNIdV;
     Result[j] = 0.0;
@@ -47,7 +47,7 @@ void TNGraphMtx::PMultiply(const TFltV& Vec, TFltV& Result) const {
 void TNGraphMtx::PMultiplyT(const TFltVV& B, int ColId, TFltV& Result) const {
   const int ColN = GetCols();
   Assert(B.GetRows() >= ColN && Result.Len() >= ColN);
-  const THash<TInt, TNGraph::TNode>& NodeH = Graph->NodeH;
+  const TPHash<TInt, TNGraph::TNode>& NodeH = Graph->NodeH;
   for (int i = 0; i < ColN; i++) Result[i] = 0.0;
   for (int j = 0; j < ColN; j++) {
     const TIntV& RowV = NodeH[j].OutNIdV;
@@ -61,7 +61,7 @@ void TNGraphMtx::PMultiplyT(const TFltVV& B, int ColId, TFltV& Result) const {
 void TNGraphMtx::PMultiplyT(const TFltV& Vec, TFltV& Result) const {
   const int RowN = GetRows();
   Assert(Vec.Len() >= RowN && Result.Len() >= RowN);
-  const THash<TInt, TNGraph::TNode>& NodeH = Graph->NodeH;
+  const TPHash<TInt, TNGraph::TNode>& NodeH = Graph->NodeH;
   for (int i = 0; i < RowN; i++) Result[i] = 0.0;
   for (int j = 0; j < RowN; j++) {
     const TIntV& RowV = NodeH[j].OutNIdV;
