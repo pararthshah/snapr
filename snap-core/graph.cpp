@@ -99,7 +99,6 @@ int TUNGraph::AddEdge(const int& SrcNId, const int& DstNId) {
 
 // Add an edge between SrcNId and DstNId to the graph.
 int TUNGraph::AddEdgeUnchecked(const int& SrcNId, const int& DstNId) {
-  return -1;
   GetNode(SrcNId).NIdV.Add(DstNId);
   if (SrcNId!=DstNId) { // not a self edge
     GetNode(DstNId).NIdV.Add(SrcNId); }
@@ -316,7 +315,7 @@ int TNGraph::AddEdge(const int& SrcNId, const int& DstNId) {
 
 int TNGraph::AddEdgeUnchecked(const int& SrcNId, const int& DstNId) {
   GetNode(SrcNId).OutNIdV.Add(DstNId);
-  GetNode(DstNId).InNIdV.Add(SrcNId);
+  //GetNode(DstNId).InNIdV.Add(SrcNId);
   return -1; // edge id
 }
 

@@ -29,7 +29,7 @@ int main(int argc, char** argv){
   Q->SetSrcCol(Schema[0].GetVal1());
   Q->SetDstCol(Schema[1].GetVal1());
 
-  Profiler.ResetTimer(TimerId);
+  /*Profiler.ResetTimer(TimerId);
   Profiler.StartTimer(TimerId);
   gettimeofday(&start, NULL);
   PUNGraph G1 = Q->ToGraphUndirected(aaFirst);
@@ -37,7 +37,7 @@ int main(int argc, char** argv){
   gettimeofday(&end, NULL);
   delta = ((end.tv_sec  - start.tv_sec) * 1000000u + 
             end.tv_usec - start.tv_usec) / 1.e6;
-  printf("ToGraphUndirected time (elapsed): %f, cpu: %f\n", delta, Profiler.GetTimerSec(TimerId));
+  printf("ToGraphUndirected time (elapsed): %f, cpu: %f\n", delta, Profiler.GetTimerSec(TimerId));*/
 
   Profiler.ResetTimer(TimerId);
   Profiler.StartTimer(TimerId);
@@ -49,7 +49,7 @@ int main(int argc, char** argv){
             end.tv_usec - start.tv_usec) / 1.e6;
   printf("ToGraphDirected time (elapsed): %f, cpu: %f\n", delta, Profiler.GetTimerSec(TimerId));
 
-  Profiler.ResetTimer(TimerId);
+  /*Profiler.ResetTimer(TimerId);
   Profiler.StartTimer(TimerId);
   gettimeofday(&start, NULL);
   PNEANet G3 = Q->ToGraph(aaFirst);
@@ -57,6 +57,6 @@ int main(int argc, char** argv){
   gettimeofday(&end, NULL);
   delta = ((end.tv_sec  - start.tv_sec) * 1000000u + 
             end.tv_usec - start.tv_usec) / 1.e6;
-  printf("ToGraph time (elapsed): %f, cpu: %f\n", delta, Profiler.GetTimerSec(TimerId));
+  printf("ToGraph time (elapsed): %f, cpu: %f\n", delta, Profiler.GetTimerSec(TimerId));*/
   return 0;
 }

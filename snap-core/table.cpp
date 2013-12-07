@@ -2491,14 +2491,62 @@ PNGraph TTable::ToGraphDirected(TAttrAggr AggrPolicy) {
   printf("add start\n");
   // make single pass over all rows in the table
   if (NodeType == atInt) {
-    for (int CurrRowIdx = 0; CurrRowIdx < Next.Len(); CurrRowIdx++) {
-      if (Next[CurrRowIdx] == Invalid) {continue;}
-      // add src and dst nodes to graph if they are not seen earlier
-      TInt SVal = IntCols[SrcColIdx][CurrRowIdx];
-      TInt DVal = IntCols[DstColIdx][CurrRowIdx];
-      Graph->AddNodeUnchecked(SVal);
-      Graph->AddNodeUnchecked(DVal);
-      Graph->AddEdgeUnchecked(SVal, DVal);
+    TIntPrV Partitions;
+    GetPartitionRanges(Partitions, CHUNKS_PER_THREAD);
+    TInt PartitionSize = Partitions[0].GetVal2()-Partitions[0].GetVal1()+1;
+    TVec<TIntPrV> SrcDstPairs(Partitions.Len());
+
+    // MAP phase
+    printf("map start\n");
+    #pragma omp parallel for schedule(dynamic)
+    for (int i = 0; i < Partitions.Len(); i++){
+      SrcDstPairs[i].Reserve(PartitionSize);
+      TRowIterator RowI(Partitions[i].GetVal1(), this);
+      TRowIterator EndI(Partitions[i].GetVal2(), this);
+      while (RowI < EndI) {
+        TInt CurrRowIdx = RowI.GetRowIdx();
+        if (Next[CurrRowIdx] == Invalid) {continue;}
+        TInt SVal = IntCols[SrcColIdx][CurrRowIdx];
+        TInt DVal = IntCols[DstColIdx][CurrRowIdx];
+        Graph->AddNodeUnchecked(SVal);
+        Graph->AddNodeUnchecked(DVal);
+        SrcDstPairs[i].Add(TIntPr(SVal, DVal));
+        RowI++;
+      }
+      //printf("Thread %d: i = %d, start = %d, end = %d\n", omp_get_thread_num(), i,
+      //  Partitions[i].GetVal1().Val, Partitions[i].GetVal2().Val);
+    }
+
+    printf("combine start\n");
+    TIntPrV CombinedPairs(NumValidRows, 0);
+    for (int i = 0; i < SrcDstPairs.Len(); i++) {
+      CombinedPairs.AddV(SrcDstPairs[i]);
+    }
+
+    // SORT phase
+    printf("sort start\n");
+    CombinedPairs.Sort();
+
+    TIntV Offsets;
+    TInt CurVal = CombinedPairs[0].GetVal1();
+    Offsets.Add(0);
+    for (int i = 1; i < CombinedPairs.Len(); i++) {
+      if (CombinedPairs[i].GetVal1() != CurVal) {
+        CurVal = CombinedPairs[i].GetVal1();
+        Offsets.Add(i);
+      }
+    }
+
+    // REDUCE phase
+    printf("reduce start\n");
+    #pragma omp parallel for schedule(dynamic)
+    for (int i = 0; i < Offsets.Len(); i++) {
+      TInt StartVal = Offsets[i];
+      TInt EndVal = CombinedPairs.Len();
+      if (i < Offsets.Len() - 1) { EndVal = Offsets[i+1];}
+      for (int j = StartVal; j < EndVal; j++) {
+        Graph->AddEdgeUnchecked(CombinedPairs[j].GetVal1(), CombinedPairs[j].GetVal2());
+      }
     }
   } else if (NodeType == atFlt) {
     // node values - i.e. the unique values of src/dst col
@@ -2557,10 +2605,7 @@ PUNGraph TTable::ToGraphUndirected(TAttrAggr AggrPolicy) {
       TInt DVal = IntCols[DstColIdx][CurrRowIdx];
       Graph->AddNodeUnchecked(SVal);
       Graph->AddNodeUnchecked(DVal);
-//#pragma omp critical
-//{
-      Graph->AddEdgeUnchecked(SVal, DVal);
-//}
+      //if (CurrRowIdx % 10000 == 0) { printf("%d done\n", CurrRowIdx);}
     }
   } else if (NodeType == atFlt) {
     // node values - i.e. the unique values of src/dst col
