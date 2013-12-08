@@ -41,7 +41,9 @@ TStr TRowIterator::GetStrAttr(TInt ColIdx) const {
 }
 
 TInt TRowIterator::GetIntAttr(const TStr& Col) const {
+  //printf("GetIntAttr: %s\n", Col.CStr());
   TInt ColIdx = Table->ColTypeMap.GetDat(Col).Val2;
+  //printf("GetIntAttr: %d %d\n", ColIdx.Val, CurrRowIdx.Val);
   return Table->IntCols[ColIdx][CurrRowIdx];
 }
 
@@ -634,8 +636,8 @@ void TTable::KeepSortedRows(const TIntV& KeepV){
   }
 }
 
-void TTable::GetPartitionRanges(TIntPrV& Partitions, TInt ChunksPerThread) const {
-  TInt PartitionSize = NumValidRows / (omp_get_max_threads()*ChunksPerThread);
+void TTable::GetPartitionRanges(TIntPrV& Partitions, TInt NumPartitions) const {
+  TInt PartitionSize = NumValidRows / (NumPartitions);
   if (PartitionSize < 10) { PartitionSize = 10;}
   TRowIterator RI = BegRI();
   TInt currStart = RI.GetRowIdx();
@@ -798,7 +800,7 @@ void TTable::GroupAux(const TStrV& GroupBy, THashPar<TGroupKey, TPair<TInt, TInt
 
   #ifdef _OPENMP
   TIntPrV Partitions;
-  GetPartitionRanges(Partitions, CHUNKS_PER_THREAD);
+  GetPartitionRanges(Partitions, omp_get_max_threads()*CHUNKS_PER_THREAD);
   //Grouping.ResizePar(1005);
   #pragma omp parallel for schedule(dynamic) private(isGroupKey)
   for (int i = 0; i < Partitions.Len(); i++){
@@ -1331,7 +1333,7 @@ PTable TTable::Join(const TStr& Col1, const TTable& Table, const TStr& Col2) {
       
       #ifdef _OPENMP
       TIntPrV Partitions;
-      TB.GetPartitionRanges(Partitions, CHUNKS_PER_THREAD);
+      TB.GetPartitionRanges(Partitions, omp_get_max_threads()*CHUNKS_PER_THREAD);
       TInt PartitionSize = Partitions[0].GetVal2()-Partitions[0].GetVal1()+1;
       TVec<TIntPrV> JointRowIDSet(Partitions.Len());
 
@@ -1355,10 +1357,9 @@ PTable TTable::Join(const TStr& Col1, const TTable& Table, const TStr& Col2) {
           RowI++;
         }
         //JointTable->AddNJointRows(*this, Table, JointRowIDs);
-        //printf("Thread %d: i = %d, start = %d, end = %d, num = %d\n", omp_get_thread_num(), i,
-        //  Partitions[i].GetVal1().Val, Partitions[i].GetVal2().Val, JointRowIDs.Len());
+        //printf("END: Thread %d: i = %d, start = %d, end = %d, num = %d\n", omp_get_thread_num(), i,
+        //  Partitions[i].GetVal1().Val, Partitions[i].GetVal2().Val, JointRowIDSet[i].Len());
       }
-      //printf("AddNJointRows\n");
       JointTable->AddNJointRows(*this, Table, JointRowIDSet);      
 
       #else
@@ -1384,7 +1385,7 @@ PTable TTable::Join(const TStr& Col1, const TTable& Table, const TStr& Col2) {
 
       #ifdef _OPENMP
       TIntPrV Partitions;
-      TB.GetPartitionRanges(Partitions, CHUNKS_PER_THREAD);
+      TB.GetPartitionRanges(Partitions, omp_get_max_threads()*CHUNKS_PER_THREAD);
       TInt PartitionSize = Partitions[0].GetVal2()-Partitions[0].GetVal1()+1;
       TVec<TIntPrV> JointRowIDSet(Partitions.Len());
 
@@ -1432,7 +1433,7 @@ PTable TTable::Join(const TStr& Col1, const TTable& Table, const TStr& Col2) {
 
       #ifdef _OPENMP
       TIntPrV Partitions;
-      TB.GetPartitionRanges(Partitions, CHUNKS_PER_THREAD);
+      TB.GetPartitionRanges(Partitions, omp_get_max_threads()*CHUNKS_PER_THREAD);
       TInt PartitionSize = Partitions[0].GetVal2()-Partitions[0].GetVal1()+1;
       TVec<TIntPrV> JointRowIDSet(Partitions.Len());
 
@@ -1638,7 +1639,7 @@ void TTable::SelectAtomicIntConst(const TStr& Col1, const TInt& Val2, TPredComp 
   } else if (Table) {
     #ifdef _OPENMP
     TIntPrV Partitions;
-    GetPartitionRanges(Partitions, CHUNKS_PER_THREAD);
+    GetPartitionRanges(Partitions, omp_get_max_threads()*CHUNKS_PER_THREAD);
     TInt PartitionSize = Partitions[0].GetVal2()-Partitions[0].GetVal1()+1;
     SelectedTable->ResizeTable(NumValidRows);
   
@@ -1704,7 +1705,7 @@ void TTable::SelectAtomicStrConst(const TStr& Col1, const TStr& Val2, TPredComp 
   } else if (Table) {
     #if 0//def _OPENMP
     TIntPrV Partitions;
-    GetPartitionRanges(Partitions, CHUNKS_PER_THREAD);
+    GetPartitionRanges(Partitions, omp_get_max_threads()*CHUNKS_PER_THREAD);
     TInt PartitionSize = Partitions[0].GetVal2()-Partitions[0].GetVal1()+1;
     SelectedTable->ResizeTable(NumValidRows);
     printf("select start parallel\n");
@@ -1775,7 +1776,7 @@ void TTable::SelectAtomicFltConst(const TStr& Col1, const TFlt& Val2, TPredComp 
   } else if (Table) {
     #ifdef _OPENMP
     TIntPrV Partitions;
-    GetPartitionRanges(Partitions, CHUNKS_PER_THREAD);
+    GetPartitionRanges(Partitions, omp_get_max_threads()*CHUNKS_PER_THREAD);
     TInt PartitionSize = Partitions[0].GetVal2()-Partitions[0].GetVal1()+1;
     SelectedTable->ResizeTable(NumValidRows);
   
@@ -2509,6 +2510,7 @@ PNEANet TTable::ToGraph(TAttrAggr AggrPolicy) {
 }
 
 PNGraph TTable::ToGraphDirected(TAttrAggr AggrPolicy) {
+  const int NumThreads = 16;
   PNGraph Graph = TNGraph::New();
   
   const TAttrType NodeType = GetColType(SrcCol);
@@ -2520,62 +2522,103 @@ PNGraph TTable::ToGraphDirected(TAttrAggr AggrPolicy) {
   // make single pass over all rows in the table
   if (NodeType == atInt) {
     TIntPrV Partitions;
-    GetPartitionRanges(Partitions, CHUNKS_PER_THREAD);
+    GetPartitionRanges(Partitions, NumThreads*CHUNKS_PER_THREAD);
     TInt PartitionSize = Partitions[0].GetVal2()-Partitions[0].GetVal1()+1;
     TVec<TIntPrV> SrcDstPairs(Partitions.Len());
+    TVec<TIntPrV> DstSrcPairs(Partitions.Len());
 
     // MAP phase
     printf("map start\n");
-    #pragma omp parallel for schedule(dynamic)
-    for (int i = 0; i < Partitions.Len(); i++){
-      SrcDstPairs[i].Reserve(PartitionSize);
+    #pragma omp parallel for schedule(dynamic) num_threads(NumThreads)
+    for (int p = 0; p < 2*Partitions.Len(); p++){
+      int i = p/2;
+      int j = p%2;
       TRowIterator RowI(Partitions[i].GetVal1(), this);
       TRowIterator EndI(Partitions[i].GetVal2(), this);
-      while (RowI < EndI) {
-        TInt CurrRowIdx = RowI.GetRowIdx();
-        if (Next[CurrRowIdx] == Invalid) {continue;}
-        TInt SVal = IntCols[SrcColIdx][CurrRowIdx];
-        TInt DVal = IntCols[DstColIdx][CurrRowIdx];
-        Graph->AddNodeUnchecked(SVal);
-        Graph->AddNodeUnchecked(DVal);
-        SrcDstPairs[i].Add(TIntPr(SVal, DVal));
-        RowI++;
+      if (j == 0) {
+        SrcDstPairs[i].Reserve(PartitionSize);
+        while (RowI < EndI) {
+          TInt CurrRowIdx = RowI.GetRowIdx();
+          TInt SVal = IntCols[SrcColIdx][CurrRowIdx];
+          TInt DVal = IntCols[DstColIdx][CurrRowIdx];
+          SrcDstPairs[i].Add(TIntPr(SVal, DVal));
+          RowI++;
+        }
+        SrcDstPairs[i].Sort();
+      } else {
+        DstSrcPairs[i].Reserve(PartitionSize);
+        while (RowI < EndI) {
+          TInt CurrRowIdx = RowI.GetRowIdx();
+          TInt SVal = IntCols[SrcColIdx][CurrRowIdx];
+          TInt DVal = IntCols[DstColIdx][CurrRowIdx];
+          DstSrcPairs[i].Add(TIntPr(DVal, SVal));
+          RowI++;
+        }
+        DstSrcPairs[i].Sort();
       }
+      
       //printf("Thread %d: i = %d, start = %d, end = %d\n", omp_get_thread_num(), i,
       //  Partitions[i].GetVal1().Val, Partitions[i].GetVal2().Val);
     }
 
     printf("combine start\n");
-    TIntPrV CombinedPairs(NumValidRows, 0);
+    TIntPrV CombinedSrcDst(NumValidRows, 0);
+    TIntPrV CombinedDstSrc(NumValidRows, 0);
     for (int i = 0; i < SrcDstPairs.Len(); i++) {
-      CombinedPairs.AddV(SrcDstPairs[i]);
+      CombinedSrcDst.AddV(SrcDstPairs[i]);
+      CombinedDstSrc.AddV(DstSrcPairs[i]);
     }
 
     // SORT phase
     printf("sort start\n");
-    CombinedPairs.Sort();
+    CombinedSrcDst.Sort();
+    CombinedDstSrc.Sort();
 
-    TIntV Offsets;
-    TInt CurVal = CombinedPairs[0].GetVal1();
-    Offsets.Add(0);
-    for (int i = 1; i < CombinedPairs.Len(); i++) {
-      if (CombinedPairs[i].GetVal1() != CurVal) {
-        CurVal = CombinedPairs[i].GetVal1();
-        Offsets.Add(i);
+    TIntV OffsetsSrc;
+    TIntV OffsetsDst;
+    TInt CurSrc = CombinedSrcDst[0].GetVal1();
+    TInt CurDst = CombinedDstSrc[0].GetVal1();
+    OffsetsSrc.Add(0);
+    OffsetsDst.Add(0);
+    Graph->AddNodeUnchecked(CurSrc);
+    Graph->AddNodeUnchecked(CurDst);
+    for (int i = 1; i < CombinedSrcDst.Len(); i++) {
+      if (CombinedSrcDst[i].GetVal1() != CurSrc) {
+        CurSrc = CombinedSrcDst[i].GetVal1();
+        OffsetsSrc.Add(i);
+        Graph->AddNodeUnchecked(CurSrc);
+      }
+    }
+    for (int i = 1; i < CombinedDstSrc.Len(); i++) {
+      if (CombinedDstSrc[i].GetVal1() != CurDst) {
+        CurDst = CombinedDstSrc[i].GetVal1();
+        OffsetsDst.Add(i);
+        Graph->AddNodeUnchecked(CurDst);
       }
     }
 
     // REDUCE phase
-    printf("reduce start\n");
-    #pragma omp parallel for schedule(dynamic)
-    for (int i = 0; i < Offsets.Len(); i++) {
-      TInt StartVal = Offsets[i];
-      TInt EndVal = CombinedPairs.Len();
-      if (i < Offsets.Len() - 1) { EndVal = Offsets[i+1];}
-      for (int j = StartVal; j < EndVal; j++) {
-        Graph->AddEdgeUnchecked(CombinedPairs[j].GetVal1(), CombinedPairs[j].GetVal2());
+    /*printf("reduce start\n");
+    #pragma omp parallel for schedule(static) num_threads(NumThreads)
+    for (int p = 0; p < OffsetsSrc.Len()+OffsetsDst.Len(); p++) {
+      int i = p;
+      if (i < OffsetsSrc.Len()) {
+        TInt StartVal = OffsetsSrc[i];
+        TInt EndVal = CombinedSrcDst.Len();
+        if (i < Offsets.Len() - 1) { EndVal = OffsetsSrc[i+1];}
+        for (int j = StartVal; j < EndVal; j++) {
+          Graph->AddOutEdgeUnchecked(CombinedSrcDst[j].GetVal1(), CombinedSrcDst[j].GetVal2());
+        }
+      } else {
+        i -= OffsetsSrc.Len();
+        TInt StartVal = OffsetsDst[i];
+        TInt EndVal = CombinedDstSrc.Len();
+        if (i < Offsets.Len() - 1) { EndVal = OffsetsDst[i+1];}
+        for (int j = StartVal; j < EndVal; j++) {
+          Graph->AddInEdgeUnchecked(CombinedDstSrc[j].GetVal1(), CombinedDstSrc[j].GetVal2());
+        }
       }
-    }
+    }*/
   } else if (NodeType == atFlt) {
     // node values - i.e. the unique values of src/dst col
     //THashSet<TInt> IntNodeVals; // for both int and string node attr types.
@@ -2605,8 +2648,8 @@ PNGraph TTable::ToGraphDirected(TAttrAggr AggrPolicy) {
   }
   
   printf("add done\n");
-  Graph->SortNodeAdjV();
-  printf("sort done\n");
+  //Graph->SortNodeAdjV();
+  //printf("sort done\n");
 
   return Graph;
 }

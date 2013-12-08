@@ -378,7 +378,9 @@ public:
   /// Adds an edge from node IDs SrcNId to node DstNId to the graph. ##TNGraph::AddEdge
   int AddEdge(const int& SrcNId, const int& DstNId);
   /// Adds an edge from node IDs SrcNId to node DstNId to the graph without performing checks.
-  int AddEdgeUnchecked(const int& SrcNId, const int& DstNId);
+  int AddInEdgeUnchecked(const int& SrcNId, TIntV& DstNIdV);
+  /// Adds an edge from node IDs SrcNId to node DstNId to the graph without performing checks.
+  int AddOutEdgeUnchecked(const int& DstNId, TIntV& SrcNIdV);
   /// Adds an edge from EdgeI.GetSrcNId() to EdgeI.GetDstNId() to the graph.
   int AddEdge(const TEdgeI& EdgeI) { return AddEdge(EdgeI.GetSrcNId(), EdgeI.GetDstNId()); }
   /// Deletes an edge from node IDs SrcNId to DstNId from the graph. ##TNGraph::DelEdge
@@ -406,7 +408,7 @@ public:
   /// Deletes all nodes and edges from the graph.
   void Clr() { MxNId=0; NodeH.Clr(); }
   /// Reserves memory for a graph of Nodes nodes and Edges edges.
-  void Reserve(const int& Nodes, const int& Edges) { if (Nodes>0) { NodeH.Gen(Nodes/2); } }
+  void Reserve(const int& Nodes, const int& Edges) { if (Nodes>0) { NodeH.Gen(Nodes); } }
   /// Reserves memory for node ID NId having InDeg in-edges.
   void ReserveNIdInDeg(const int& NId, const int& InDeg) { GetNode(NId).InNIdV.Reserve(InDeg); }
   /// Reserves memory for node ID NId having OutDeg out-edges.

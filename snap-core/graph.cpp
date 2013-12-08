@@ -313,9 +313,15 @@ int TNGraph::AddEdge(const int& SrcNId, const int& DstNId) {
   return -1; // edge id
 }
 
-int TNGraph::AddEdgeUnchecked(const int& SrcNId, const int& DstNId) {
-  GetNode(SrcNId).OutNIdV.Add(DstNId);
+int TNGraph::AddOutEdgeUnchecked(const int& SrcNId, TIntV& DstNIdV) {
+  GetNode(SrcNId).OutNIdV.MoveFrom(DstNIdV);
   //GetNode(DstNId).InNIdV.Add(SrcNId);
+  return -1; // edge id
+}
+
+int TNGraph::AddInEdgeUnchecked(const int& DstNId, TIntV& SrcNIdV) {
+  //GetNode(SrcNId).OutNIdV.Add(DstNId);
+  GetNode(DstNId).InNIdV.MoveFrom(SrcNIdV);
   return -1; // edge id
 }
 
