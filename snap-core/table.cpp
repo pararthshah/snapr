@@ -1338,8 +1338,8 @@ PTable TTable::Join(const TStr& Col1, const TTable& Table, const TStr& Col2) {
       #pragma omp parallel for schedule(dynamic) 
       for (int i = 0; i < Partitions.Len(); i++){
         JointRowIDSet[i].Reserve(PartitionSize);
-        TRowIterator RowI(Partitions[i].GetVal1(), this);
-        TRowIterator EndI(Partitions[i].GetVal2(), this);
+        TRowIterator RowI(Partitions[i].GetVal1(), &TB);
+        TRowIterator EndI(Partitions[i].GetVal2(), &TB);
         while (RowI < EndI) {
           TInt K = RowI.GetIntAttr(ColB);
           if(T.IsKey(K)){
@@ -1391,8 +1391,8 @@ PTable TTable::Join(const TStr& Col1, const TTable& Table, const TStr& Col2) {
       #pragma omp parallel for schedule(dynamic) 
       for (int i = 0; i < Partitions.Len(); i++){
         JointRowIDSet[i].Reserve(PartitionSize);
-        TRowIterator RowI(Partitions[i].GetVal1(), this);
-        TRowIterator EndI(Partitions[i].GetVal2(), this);
+        TRowIterator RowI(Partitions[i].GetVal1(), &TB);
+        TRowIterator EndI(Partitions[i].GetVal2(), &TB);
         while (RowI < EndI) {
           TFlt K = RowI.GetFltAttr(ColB);
           if(T.IsKey(K)){
@@ -1439,8 +1439,8 @@ PTable TTable::Join(const TStr& Col1, const TTable& Table, const TStr& Col2) {
       #pragma omp parallel for schedule(dynamic) 
       for (int i = 0; i < Partitions.Len(); i++){
         JointRowIDSet[i].Reserve(PartitionSize);
-        TRowIterator RowI(Partitions[i].GetVal1(), this);
-        TRowIterator EndI(Partitions[i].GetVal2(), this);
+        TRowIterator RowI(Partitions[i].GetVal1(), &TB);
+        TRowIterator EndI(Partitions[i].GetVal2(), &TB);
         while (RowI < EndI) {
           TStr K = RowI.GetStrAttr(ColB);
           if(T.IsKey(K)){
@@ -1684,7 +1684,7 @@ void TTable::ClassifyAtomicIntConst(const TStr& Col1, const TInt& Val2, TPredCom
   ClassifyAux(SelectedRows, LabelName, PositiveLabel, NegativeLabel);
 }
 
-void TTable::SelectAtomicStrConst(const TStr& Col1, const TStr& Val2, TPredComp Cmp, TIntV& SelectedRows, TBool Remove){
+void TTable::SelectAtomicStrConst(const TStr& Col1, const TStr& Val2, TPredComp Cmp, TIntV& SelectedRows, PTable& SelectedTable, TBool Remove, TBool Table){
   TAttrType Ty1;
   TInt ColIdx1;
 
@@ -1701,44 +1701,60 @@ void TTable::SelectAtomicStrConst(const TStr& Col1, const TStr& Val2, TPredComp 
         RowI++;
       }
     }
-  } else{
-    #ifdef _OPENMP
+  } else if (Table) {
+    #if 0//def _OPENMP
     TIntPrV Partitions;
     GetPartitionRanges(Partitions, CHUNKS_PER_THREAD);
-    TVec<TIntV> SelectedRowSet(Partitions.Len());
-
-    #pragma omp parallel for schedule(dynamic) shared(SelectedRowSet)
+    TInt PartitionSize = Partitions[0].GetVal2()-Partitions[0].GetVal1()+1;
+    SelectedTable->ResizeTable(NumValidRows);
+    printf("select start parallel\n");
+  
+    #pragma omp parallel for schedule(dynamic)
     for (int i = 0; i < Partitions.Len(); i++){
+      TIntV LocalSelectedRows;
+      LocalSelectedRows.Reserve(PartitionSize);
       TRowIterator RowI(Partitions[i].GetVal1(), this);
       TRowIterator EndI(Partitions[i].GetVal2(), this);
       while (RowI < EndI) {
+        printf("Thread %d: i = %d, row = %d\n", omp_get_thread_num(), i, RowI.GetRowIdx().Val);
         if(TPredicate::EvalStrAtom(RowI.GetStrAttr(Col1), Val2, Cmp)){ 
-          SelectedRowSet[i].Add(RowI.GetRowIdx());
+          LocalSelectedRows.Add(RowI.GetRowIdx());
         }
         RowI++;
       }
+      printf("add selected rows %d: %d\n", omp_get_thread_num(), LocalSelectedRows.Len());
+      SelectedTable->AddSelectedRows(*this, LocalSelectedRows);
+      printf("Thread %d: i = %d, start = %d, end = %d\n", omp_get_thread_num(), i,
+        Partitions[i].GetVal1().Val, Partitions[i].GetVal2().Val);
     }
+    printf("select end parallel");
+    SelectedTable->ResizeTable(SelectedTable->GetNumValidRows());
+    printf("select end");
 
-    for (int i = 0; i < SelectedRowSet.Len(); i++) {
-      SelectedRows.AddV(SelectedRowSet[i]);
-    }
     #else
+    for(TRowIterator RowI = BegRI(); RowI < EndRI(); RowI++){
+      if(TPredicate::EvalStrAtom(RowI.GetStrAttr(Col1), Val2, Cmp)){ 
+        SelectedTable->AddRow(RowI);
+      }
+    }
+    #endif
+  } else {
     for(TRowIterator RowI = BegRI(); RowI < EndRI(); RowI++){
       if(TPredicate::EvalStrAtom(RowI.GetStrAttr(Col1), Val2, Cmp)){ 
         SelectedRows.Add(RowI.GetRowIdx());
       }
     }
-    #endif
   }
 }
 
 void TTable::ClassifyAtomicStrConst(const TStr& Col1, const TStr& Val2, TPredComp Cmp, const TStr& LabelName, const TInt& PositiveLabel, const TInt& NegativeLabel){
   TIntV SelectedRows;
-  SelectAtomicStrConst(Col1, Val2, Cmp, SelectedRows, false);
+  PTable SelectedTable;
+  SelectAtomicStrConst(Col1, Val2, Cmp, SelectedRows, SelectedTable, false, false);
   ClassifyAux(SelectedRows, LabelName, PositiveLabel, NegativeLabel);
 }
 
-void TTable::SelectAtomicFltConst(const TStr& Col1, const TFlt& Val2, TPredComp Cmp, TIntV& SelectedRows, TBool Remove){
+void TTable::SelectAtomicFltConst(const TStr& Col1, const TFlt& Val2, TPredComp Cmp, TIntV& SelectedRows, PTable& SelectedTable, TBool Remove, TBool Table){
   Assert(Cmp < SUBSTR);
   TAttrType Ty1;
   TInt ColIdx1;
@@ -1756,40 +1772,52 @@ void TTable::SelectAtomicFltConst(const TStr& Col1, const TFlt& Val2, TPredComp 
         RowI++;
       }
     }
-  } else{
+  } else if (Table) {
     #ifdef _OPENMP
     TIntPrV Partitions;
     GetPartitionRanges(Partitions, CHUNKS_PER_THREAD);
-    TVec<TIntV> SelectedRowSet(Partitions.Len());
-
-    #pragma omp parallel for schedule(dynamic) shared(SelectedRowSet)
+    TInt PartitionSize = Partitions[0].GetVal2()-Partitions[0].GetVal1()+1;
+    SelectedTable->ResizeTable(NumValidRows);
+  
+    #pragma omp parallel for schedule(dynamic)
     for (int i = 0; i < Partitions.Len(); i++){
+      TIntV LocalSelectedRows;
+      LocalSelectedRows.Reserve(PartitionSize);
       TRowIterator RowI(Partitions[i].GetVal1(), this);
       TRowIterator EndI(Partitions[i].GetVal2(), this);
       while (RowI < EndI) {
         if(TPredicate::EvalAtom(RowI.GetFltAttr(Col1), Val2, Cmp)){ 
-          SelectedRowSet[i].Add(RowI.GetRowIdx());
+          LocalSelectedRows.Add(RowI.GetRowIdx());
         }
         RowI++;
       }
+      SelectedTable->AddSelectedRows(*this, LocalSelectedRows);
+      //printf("Thread %d: i = %d, start = %d, end = %d\n", omp_get_thread_num(), i,
+      //  Partitions[i].GetVal1().Val, Partitions[i].GetVal2().Val);
     }
 
-    for (int i = 0; i < SelectedRowSet.Len(); i++) {
-      SelectedRows.AddV(SelectedRowSet[i]);
-    }
+    SelectedTable->ResizeTable(SelectedTable->GetNumValidRows());
+
     #else
+    for(TRowIterator RowI = BegRI(); RowI < EndRI(); RowI++){
+      if(TPredicate::EvalAtom(RowI.GetFltAttr(Col1), Val2, Cmp)){ 
+        SelectedTable->AddRow(RowI);
+      }
+    }
+    #endif
+  } else {
     for(TRowIterator RowI = BegRI(); RowI < EndRI(); RowI++){
       if(TPredicate::EvalAtom(RowI.GetFltAttr(Col1), Val2, Cmp)){ 
         SelectedRows.Add(RowI.GetRowIdx());
       }
     }
-    #endif
   }
 }
 
 void TTable::ClassifyAtomicFltConst(const TStr& Col1, const TFlt& Val2, TPredComp Cmp, const TStr& LabelName, const TInt& PositiveLabel, const TInt& NegativeLabel){
   TIntV SelectedRows;
-  SelectAtomicFltConst(Col1, Val2, Cmp, SelectedRows, false);
+  PTable SelectedTable;
+  SelectAtomicFltConst(Col1, Val2, Cmp, SelectedRows, SelectedTable, false, false);
   ClassifyAux(SelectedRows, LabelName, PositiveLabel, NegativeLabel);
 }
 

@@ -228,7 +228,18 @@ protected:
   void ClassifyAux(const TIntV& SelectedRows, const TStr& LabelName, const TInt& PositiveLabel = 1, const TInt& NegativeLabel=  0);
 
 /***** Utility functions for handling string values *****/
-  TStr GetStrVal(TInt ColIdx, TInt RowIdx) const{ return TStr(Context.StringVals.GetKey(StrColMaps[ColIdx][RowIdx]));}
+  TStr GetStrVal(TInt ColIdx, TInt RowIdx) const{ 
+    TInt StrIntVal = StrColMaps[ColIdx][RowIdx];
+    TStr StrVal;
+    #ifdef _OPENMP
+    #pragma omp critical
+    #endif
+    {
+      StrVal = TStr(Context.StringVals.GetKey(StrIntVal));
+    }
+    //printf("GetStrVal: %d %s\n", omp_get_thread_num(), StrVal.CStr());
+    return StrVal; 
+  }
   void AddStrVal(const TInt& ColIdx, const TStr& Val);
   void AddStrVal(const TStr& Col, const TStr& Val);
 
@@ -587,17 +598,27 @@ public:
   }
   void ClassifyAtomicIntConst(const TStr& Col1, const TInt& Val2, TPredComp Cmp, const TStr& LabelName, const TInt& PositiveLabel = 1, const TInt& NegativeLabel = 0);
 
-  void SelectAtomicStrConst(const TStr& Col1, const TStr& Val2, TPredComp Cmp, TIntV& SelectedRows, TBool Remove = true);
+  void SelectAtomicStrConst(const TStr& Col1, const TStr& Val2, TPredComp Cmp, TIntV& SelectedRows, PTable& SelectedTable, TBool Remove = true, TBool Table = true);
   void SelectAtomicStrConst(const TStr& Col1, const TStr& Val2, TPredComp Cmp){
     TIntV SelectedRows;
-    SelectAtomicStrConst(Col1, Val2, Cmp, SelectedRows, true);
+    PTable SelectedTable;
+    SelectAtomicStrConst(Col1, Val2, Cmp, SelectedRows, SelectedTable, true, false);
+  }
+  void SelectAtomicStrConst(const TStr& Col1, const TStr& Val2, TPredComp Cmp, PTable& SelectedTable){
+    TIntV SelectedRows;
+    SelectAtomicStrConst(Col1, Val2, Cmp, SelectedRows, SelectedTable, false, true);
   }
   void ClassifyAtomicStrConst(const TStr& Col1, const TStr& Val2, TPredComp Cmp, const TStr& LabelName, const TInt& PositiveLabel = 1, const TInt& NegativeLabel = 0);
 
-  void SelectAtomicFltConst(const TStr& Col1, const TFlt& Val2, TPredComp Cmp, TIntV& SelectedRows, TBool Remove = true);
+  void SelectAtomicFltConst(const TStr& Col1, const TFlt& Val2, TPredComp Cmp, TIntV& SelectedRows, PTable& SelectedTable, TBool Remove = true, TBool Table = true);
   void SelectAtomicFltConst(const TStr& Col1, const TFlt& Val2, TPredComp Cmp){
     TIntV SelectedRows;
-    SelectAtomicFltConst(Col1, Val2, Cmp, SelectedRows, true);
+    PTable SelectedTable;
+    SelectAtomicFltConst(Col1, Val2, Cmp, SelectedRows, SelectedTable, true, false);
+  }
+  void SelectAtomicFltConst(const TStr& Col1, const TFlt& Val2, TPredComp Cmp, PTable& SelectedTable){
+    TIntV SelectedRows;
+    SelectAtomicFltConst(Col1, Val2, Cmp, SelectedRows, SelectedTable, false, true);
   }
   void ClassifyAtomicFltConst(const TStr& Col1, const TFlt& Val2, TPredComp Cmp, const TStr& LabelName, const TInt& PositiveLabel = 1, const TInt& NegativeLabel = 0);
 
