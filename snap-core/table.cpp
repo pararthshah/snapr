@@ -1628,6 +1628,49 @@ void TTable::SelectAtomicIntConst(const TStr& Col1, const TInt& Val2, TPredComp 
   if(Ty1 != atInt){TExcept::Throw("SelectAtomic: not type TInt");}
 
   if(Remove){
+    #ifdef _OPENMP
+    TIntPrV Partitions;
+    GetPartitionRanges(Partitions, omp_get_max_threads()*CHUNKS_PER_THREAD);
+    TInt PartitionSize = Partitions[0].GetVal2()-Partitions[0].GetVal1()+1;
+    int RemoveCount = 0;
+  
+    #pragma omp parallel for schedule(dynamic) reduction(+:RemoveCount)
+    for (int i = 0; i < Partitions.Len(); i++){
+      TRowIterator RowI(Partitions[i].GetVal1(), this);
+      TRowIterator EndI(Partitions[i].GetVal2(), this);
+      while (RowI < EndI) {
+        TInt CurrRowIdx = RowI.GetRowIdx();
+        TInt CurrIntVal = RowI.GetIntAttr(Col1);
+        RowI++;
+        if(!TPredicate::EvalAtom(CurrIntVal, Val2, Cmp)){ 
+          Next[CurrRowIdx] = -1;
+          RemoveCount++;
+        }
+      }
+      //printf("Thread %d: i = %d, start = %d, end = %d\n", omp_get_thread_num(), i,
+      //  Partitions[i].GetVal1().Val, Partitions[i].GetVal2().Val);
+    }
+    NumValidRows -= RemoveCount;
+    // repair the next vector
+    for (int i = 0; i < Next.Len();) {
+      if (Next[i] >= 0 && Next[Next[i]] == Invalid) {
+        // find first subsequent valid row
+        int j = Next[i]+1;
+        for (; j < Next.Len(); j++) {
+          if (Next[j] != Invalid || Next[j] == Last) { break;}
+        }
+        if (j < Next.Len() && (Next[j] != Invalid || Next[j] == Last)) {
+          Next[i] = j;
+          i = j;
+        } else {
+          Next[i] = Last;
+          LastValidRow = i;
+        }
+      } else {
+        i++;
+      }
+    }
+    #else
     TRowIteratorWithRemove RowI = BegRIWR();
     while(RowI.GetNextRowIdx() != Last){
       if(!TPredicate::EvalAtom(RowI.GetNextIntAttr(ColIdx1), Val2, Cmp)){
@@ -1636,6 +1679,7 @@ void TTable::SelectAtomicIntConst(const TStr& Col1, const TInt& Val2, TPredComp 
         RowI++;
       }
     }
+    #endif
   } else if (Table) {
     #ifdef _OPENMP
     TIntPrV Partitions;
