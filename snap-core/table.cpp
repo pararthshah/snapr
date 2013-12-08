@@ -1,5 +1,4 @@
 //#include "table.h"
-#include <cassert>
 
 TInt const TTable::Last =-1;
 TInt const TTable::Invalid =-2;
@@ -758,6 +757,9 @@ void TTable::StoreGroupCol(const TStr& GroupColName, const TVec<TPair<TInt, TInt
   TInt L = IntCols.Len();
   ColTypeMap.AddDat(GroupColName, TPair<TAttrType,TInt>(atInt, L-1));
   // Store group id for each row
+  #ifdef _OPENMP
+  #pragma omp parallel for schedule(dynamic, 10000)
+  #endif
   for(TInt i = 0; i < GroupAndRowIds.Len(); i++) {
     IntCols[L-1][GroupAndRowIds[i].Val2] = GroupAndRowIds[i].Val1;
   }
@@ -797,12 +799,16 @@ void TTable::GroupAux(const TStrV& GroupBy, THashPar<TGroupKey, TPair<TInt, TInt
   TVec<TPair<TInt, TInt> > GroupAndRowIds;
 
   bool isGroupKey;
-
+  
+  Grouping.ResizePar(10000005);
   #ifdef _OPENMP
+  printf("Calculating partitions...\n");
   TIntPrV Partitions;
   GetPartitionRanges(Partitions, omp_get_max_threads()*CHUNKS_PER_THREAD);
-  //Grouping.ResizePar(1005);
-  #pragma omp parallel for schedule(dynamic) private(isGroupKey)
+  GroupAndRowIds.Reserve(NumValidRows);
+  TInt GroupAndRowIdVInd = 0;
+  printf("Finding groups...\n");
+#pragma omp parallel for schedule(dynamic, CHUNKS_PER_THREAD) private(isGroupKey) num_threads(4)
   for (int i = 0; i < Partitions.Len(); i++){
     TRowIterator it(Partitions[i].GetVal1(), this);
     TRowIterator EndI(Partitions[i].GetVal2(), this);
@@ -836,40 +842,41 @@ void TTable::GroupAux(const TStrV& GroupBy, THashPar<TGroupKey, TPair<TInt, TInt
 
       it++;
 
+      //continue ;
+
       bool done = false;
       while (!done) {
         isGroupKey = Grouping.IsKey(GroupKey);
         if (isGroupKey) {
           if (!KeepUnique) {
-            //TPair<TInt, TIntV>& NewGroup = Grouping.GetDat(GroupKey);
-            TInt Num = Grouping.AddDatPar(GroupKey, IntCols[IdColIdx][RowIdx]);
-#pragma omp critical
-            {
-              if (GroupColName != "") {
-                //GroupAndRowIds.Add(TPair<TInt, TInt>(NewGroup.Val1, RowIdx));
-                GroupAndRowIds.Add(TPair<TInt, TInt>(Num, RowIdx));
-              }
-            }
+            TInt Num = Grouping.AddDatPar1(GroupKey, IntCols[IdColIdx][RowIdx]);
+            if (GroupColName == "") break;
+            TInt ind = __sync_fetch_and_add(&GroupAndRowIdVInd.Val, 1);
+            GroupAndRowIds[ind] = TPair<TInt, TInt>(Num, RowIdx);
           }
           break;
         }
 
+        TPair<TInt, TIntV> NewGroup;
+        NewGroup.Val2.Add(IntCols[IdColIdx][RowIdx]);
 #pragma omp critical 
         {
-          isGroupKey = Grouping.IsKey(GroupKey);
-          if (!isGroupKey) {
-            TPair<TInt, TIntV> NewGroup;
-            NewGroup.Val1 = GroupNum;
-            NewGroup.Val2.Add(IntCols[IdColIdx][RowIdx]);
-            Grouping.AddDat(GroupKey, NewGroup);
-            if (GroupColName != "") {
-              GroupAndRowIds.Add(TPair<TInt, TInt>(GroupNum, RowIdx));
-            }
-            if (KeepUnique) { 
-              UniqueVec.Add(RowIdx);
-            }
-            GroupNum++;
-            done = true;
+          NewGroup.Val1 = GroupNum;
+          done = Grouping.AddDatIfNotExist(GroupKey, NewGroup);
+          if (done) GroupNum++;
+        }
+
+        if (!done) continue;
+
+        if (GroupColName != "") {
+          TInt ind = __sync_fetch_and_add(&GroupAndRowIdVInd.Val, 1);
+          GroupAndRowIds[ind] = TPair<TInt, TInt>(NewGroup.Val1, RowIdx);
+        }
+
+        if (KeepUnique) {
+#pragma omp critical 
+          {
+            UniqueVec.Add(RowIdx);
           }
         }
       }
@@ -932,6 +939,9 @@ void TTable::GroupAux(const TStrV& GroupBy, THashPar<TGroupKey, TPair<TInt, TInt
   }
   #endif
 
+  printf("Groups calculated. Updating table...\n");
+  //return ;
+
   // update group mapping
   if (!KeepUnique) {
     TPair<TStrV, TBool> GroupStmt(GroupBy, Ordered);
@@ -970,6 +980,8 @@ void TTable::Aggregate(const TStrV& GroupByAttrs, TAttrAggr AggOp,
     // group mapping does not exist, perform grouping first
     Group(GroupByAttrs, "", Ordered);
   }
+  printf("Aggregate: Grouping done...\n");
+  //return;
 
   // group mapping exists, retrieve it and aggregate
   THash<TGroupKey, TIntV> Mapping = GroupMapping.GetDat(GroupStmtName);

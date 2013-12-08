@@ -7,6 +7,7 @@
 #include <omp.h>
 #define CHUNKS_PER_THREAD 10
 #endif
+#define CHUNKS_PER_THREAD 10
 
 class TTable;
 typedef TPt<TTable> PTable;

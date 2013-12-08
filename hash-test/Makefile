@@ -7,7 +7,7 @@ include ../Makefile.config
 HEADER = Engine.h
 CPP = Engine.cpp
 
-TEST = HashTest GroupParTest
+TEST = GroupParTest HashTest 
 
 all: $(TEST)
 

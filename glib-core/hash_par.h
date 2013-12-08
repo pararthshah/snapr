@@ -2,15 +2,15 @@
 #define HASH_PAR_H
 #include "bd.h"
 
-//inline unsigned int __sync_fetch_and_add(volatile unsigned int* p, unsigned int incr)
-//{
-//    unsigned int result;
-//    asm volatile("lock; xadd %0, %1" :
-//            "=r"(result), "=m"(*p):
-//            "0"(incr), "m"(*p) :
-//            "memory");
-//    return result + 1;
-//}
+inline unsigned int __sync_fetch_and_add_2(volatile unsigned int* p, unsigned int incr)
+{
+    unsigned int result;
+    asm volatile("lock; xadd %0, %1" :
+            "=r"(result), "=m"(*p):
+            "0"(incr), "m"(*p) :
+            "memory");
+    return result + 1;
+}
 
 /////////////////////////////////////////////////
 // Hash-Table
@@ -140,7 +140,9 @@ public:
   TDat& AddDat(const TKey& Key, const TDat& Dat){
     return KeyDatV[AddKey(Key)].Dat=Dat;}
 
-  int AddDatPar(const TKey& Key, const TInt& Dat) {
+  bool AddDatIfNotExist(const TKey& Key, const TDat& Dat);
+
+  int AddDatPar1(const TKey& Key, const TInt& Dat) {
     //if ((KeyDatV.Len()>2*PortV.Len())||PortV.Empty()){
     //  Resize();
     //}
@@ -173,7 +175,9 @@ public:
         if (port_lock == false) continue;
 
         volatile unsigned int *p = (volatile unsigned int *)&FFreeKeyId.Val;
-        KeyId = __sync_fetch_and_add(p, 1);
+        KeyId = __sync_fetch_and_add_2(p, 1);
+
+        //KeyId = __sync_fetch_and_add(&FFreeKeyId.Val, 1);
 
         KeyDatV[KeyId].Next=-1;
         KeyDatV[KeyId].HashCd=HashCd;
@@ -189,7 +193,7 @@ public:
             KeyDatV[KeyId].Dat.Val2.Add(Dat);
             *pt = temp;
             done = true;
-	    Ret = 0;
+	          Ret = 0;
             break;
           }
         }
@@ -211,7 +215,7 @@ public:
             *pt = temp;
             if (port_lock) *ptr = old;
             done = true;
-	    Ret = KeyDatV[KeyId].Dat.Val1;
+	          Ret = KeyDatV[KeyId].Dat.Val1;
             break;
           }
           else {
@@ -436,7 +440,9 @@ int THashPar<TKey, TDat, THashFunc>::AddKeyPar(const TKey& Key){
         if (port_lock == false) continue;
 
         volatile unsigned int *p = (volatile unsigned int *)&FFreeKeyId.Val;
-        KeyId = __sync_fetch_and_add(p, 1);
+        KeyId = __sync_fetch_and_add_2(p, 1);
+
+        //KeyId = __sync_fetch_and_add(&FFreeKeyId.Val, 1);
 
         KeyDatV[KeyId].Next=-1;
         KeyDatV[KeyId].HashCd=HashCd;
@@ -657,5 +663,70 @@ void THashPar<TKey, TDat, THashFunc>::Sort(const bool& CmpKey, const bool& Asc) 
       KeyDatV[i].Next = MapV[KeyDatV[i].Next]; }
   }
 }
+
+template<class TKey, class TDat, class THashFunc>
+bool THashPar<TKey, TDat, THashFunc>::AddDatIfNotExist(const TKey& Key, const TDat& Dat) {
+  const int PortN=abs(THashFunc::GetPrimHashCd(Key)%PortV.Len());
+  const int HashCd=abs(THashFunc::GetSecHashCd(Key));
+  int PrevKeyId=-1;
+  int KeyId;
+  bool done = false;
+  while(!done) {
+    bool port_lock = false;
+    int old;
+    int *ptr = &PortLockV[PortN].Val;
+
+    old = PortLockV[PortN];
+    if (old == -2) {
+      port_lock = false;
+    }
+    else if (__sync_bool_compare_and_swap(ptr, old, -2)) {
+      port_lock = true;
+    }
+
+    KeyId = PortV[PortN];
+    while ((KeyId!=-1) &&
+        !((KeyDatV[KeyId].HashCd==HashCd) && (KeyDatV[KeyId].Key==Key))){
+      PrevKeyId=KeyId; KeyId=KeyDatV[KeyId].Next;}
+
+    if (KeyId==-1) {
+      if (port_lock == false) continue;
+
+      volatile unsigned int *p = (volatile unsigned int *)&FFreeKeyId.Val;
+      KeyId = __sync_fetch_and_add_2(p, 1);
+
+      //KeyId = __sync_fetch_and_add(&FFreeKeyId.Val, 1);
+
+      KeyDatV[KeyId].Next=-1;
+      KeyDatV[KeyId].HashCd=HashCd;
+      KeyDatV[KeyId].Key=Key;
+
+      int temp;
+      int* pt = &KeyDatV[KeyId].Next.Val;
+      while(true) {
+        temp = KeyDatV[KeyId].Next;
+        if (temp == -2) continue;
+        if (__sync_bool_compare_and_swap(pt, temp, -2)) {
+          KeyDatV[KeyId].Dat = Dat;
+          *pt = temp;
+          done = true;
+          break;
+        }
+      }
+      if (PrevKeyId==-1){
+        PortV[PortN] = KeyId;
+      } else {
+        KeyDatV[PrevKeyId].Next=KeyId;
+      }
+      *ptr = old;
+    }
+    else {
+      if (port_lock) *ptr = old;
+      break;
+    }
+  }
+  return done;
+}
+
 
 #endif //HASH_PAR_H
