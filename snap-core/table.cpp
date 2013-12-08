@@ -1643,7 +1643,7 @@ void TTable::SelectAtomicIntConst(const TStr& Col1, const TInt& Val2, TPredComp 
         TInt CurrIntVal = RowI.GetIntAttr(Col1);
         RowI++;
         if(!TPredicate::EvalAtom(CurrIntVal, Val2, Cmp)){ 
-          Next[CurrRowIdx] = -1;
+          Next[CurrRowIdx] = TTable::Invalid;
           RemoveCount++;
         }
       }
@@ -1670,6 +1670,7 @@ void TTable::SelectAtomicIntConst(const TStr& Col1, const TInt& Val2, TPredComp 
         i++;
       }
     }
+    SetFirstValidRow();
     #else
     TRowIteratorWithRemove RowI = BegRIWR();
     while(RowI.GetNextRowIdx() != Last){
@@ -1705,6 +1706,7 @@ void TTable::SelectAtomicIntConst(const TStr& Col1, const TInt& Val2, TPredComp 
     }
 
     SelectedTable->ResizeTable(SelectedTable->GetNumValidRows());
+    SelectedTable->SetFirstValidRow();
 
     #else
     for(TRowIterator RowI = BegRI(); RowI < EndRI(); RowI++){
@@ -1774,6 +1776,7 @@ void TTable::SelectAtomicStrConst(const TStr& Col1, const TStr& Val2, TPredComp 
     }
     printf("select end parallel");
     SelectedTable->ResizeTable(SelectedTable->GetNumValidRows());
+    SelectedTable->SetFirstValidRow();
     printf("select end");
 
     #else
@@ -1842,6 +1845,7 @@ void TTable::SelectAtomicFltConst(const TStr& Col1, const TFlt& Val2, TPredComp 
     }
 
     SelectedTable->ResizeTable(SelectedTable->GetNumValidRows());
+    SelectedTable->SetFirstValidRow();
 
     #else
     for(TRowIterator RowI = BegRI(); RowI < EndRI(); RowI++){
