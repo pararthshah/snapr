@@ -394,6 +394,12 @@ protected:
   void RemoveRows(const TIntV& RemoveV);
   // remove all rows that are not mentioned in the SORTED vector KeepV
   void KeepSortedRows(const TIntV& KeepV);
+  void SetFirstValidRow() {
+    for (int i = 0; i < Next.Len(); i++) { 
+      if(Next[i] != TTable::Invalid) { FirstValidRow = i; return;}
+    }
+    TExcept::Throw("SetFirstValidRow: Table is empty");
+  }
 
 /***** Utility functions for Join *****/
   // Initialize an empty table for the join of this table with the given table
