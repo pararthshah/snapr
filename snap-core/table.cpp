@@ -1987,6 +1987,66 @@ void TTable::QSort(TIntV& V, TInt StartIdx, TInt EndIdx, const TVec<TAttrType>& 
   }
 }
 
+void TTable::Merge(TIntV& V, TInt Idx1, TInt Idx2, TInt Idx3, const TVec<TAttrType>& SortByTypes, const TIntV& SortByIndices, TBool Asc) {
+  TInt i = Idx1, j = Idx2;
+  TIntV SortedV;
+  while  (i < Idx2 && j < Idx3) {
+    if (CompareRows(V[i], V[j], SortByTypes, SortByIndices, Asc) <= 0) {
+      SortedV.Add(V[i]);
+      i++;
+    }
+    else {
+      SortedV.Add(V[j]);
+      j++;
+    }
+  }
+  while (i < Idx2) {
+    SortedV.Add(V[i]);
+    i++;
+  }
+  while (j < Idx3) {
+    SortedV.Add(V[j]);
+    j++;
+  }
+
+  for (TInt sz = 0; sz < Idx3 - Idx1; sz++) {
+    V[Idx1 + sz] = SortedV[sz];
+  }
+}
+
+void TTable::QSortPar(TIntV& V, const TVec<TAttrType>& SortByTypes, const TIntV& SortByIndices, TBool Asc) {
+  TInt NumThreads = 8;
+  TInt Sz = V.Len();
+  TIntV IndV, NextV;
+  for (TInt i = 0; i < NumThreads; i++) {
+    IndV.Add(i * (Sz / NumThreads));
+  }
+  IndV.Add(Sz);
+
+  omp_set_num_threads(NumThreads);
+  #pragma omp parallel for
+  for (TInt i = 0; i < NumThreads; i++) {
+    QSort(V, IndV[i], IndV[i+1] - 1, SortByTypes, SortByIndices, Asc);
+  }
+
+  while (NumThreads > 1) {
+    omp_set_num_threads(NumThreads / 2);
+    #pragma omp parallel for
+    for (TInt i = 0; i < NumThreads; i += 2) {
+      Merge(V, IndV[i], IndV[i+1], IndV[i+2], SortByTypes, SortByIndices, Asc);
+    }
+
+    NextV.Clr();
+    for (TInt i = 0; i < NumThreads; i+=2) {
+      NextV.Add(IndV[i]);
+    }
+    NextV.Add(Sz);
+    IndV = NextV;
+
+    NumThreads = NumThreads / 2;
+  }
+}
+
 void TTable::Order(const TStrV& OrderBy, const TStr& OrderColName, TBool ResetRankByMSC, TBool Asc){
   // get a vector of all valid row indices
   TIntV ValidRows = TIntV(NumValidRows);
@@ -2007,8 +2067,14 @@ void TTable::Order(const TStrV& OrderBy, const TStr& OrderColName, TBool ResetRa
     OrderByTypes[i] = GetColType(OrderBy[i]);
     OrderByIndices[i] = GetColIdx(OrderBy[i]);
   }
+
   // sort that vector according to the attributes given in "OrderBy" in lexicographic order
+  #ifdef _OPENMP
+  QSortPar(ValidRows, OrderByTypes, OrderByIndices, Asc);
+  #else
   QSort(ValidRows, 0, NumValidRows-1, OrderByTypes, OrderByIndices, Asc);
+  #endif
+
   // rewire Next vector
   if (NumValidRows > 0){
     FirstValidRow = ValidRows[0];
@@ -2020,11 +2086,11 @@ void TTable::Order(const TStrV& OrderBy, const TStr& OrderColName, TBool ResetRa
   }
   if (NumValidRows > 0){
     Next[ValidRows[NumValidRows-1]] = Last;
-    LastValidRow = NumValidRows-1;
+    LastValidRow = ValidRows[NumValidRows-1];
   } else {
     LastValidRow = Last;
   }
-
+  
   // add rank column
   if(!OrderColName.Empty()){
     TIntV RankCol = TIntV(NumRows);

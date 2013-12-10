@@ -232,9 +232,9 @@ protected:
   TStr GetStrVal(TInt ColIdx, TInt RowIdx) const{ 
     TInt StrIntVal = StrColMaps[ColIdx][RowIdx];
     TStr StrVal;
-    #ifdef _OPENMP
-    #pragma omp critical
-    #endif
+    //#ifdef _OPENMP
+    //#pragma omp critical
+    //#endif
     {
       StrVal = TStr(Context.StringVals.GetKey(StrIntVal));
     }
@@ -384,6 +384,8 @@ protected:
   TInt Partition(TIntV& V, TInt StartIdx, TInt EndIdx, const TVec<TAttrType>& SortByTypes, const TIntV& SortByIndices, TBool Asc);
   void ISort(TIntV& V, TInt StartIdx, TInt EndIdx, const TVec<TAttrType>& SortByTypes, const TIntV& SortByIndices, TBool Asc = true);
   void QSort(TIntV& V, TInt StartIdx, TInt EndIdx, const TVec<TAttrType>& SortByTypes, const TIntV& SortByIndices, TBool Asc = true);
+  void Merge(TIntV& V, TInt Idx1, TInt Idx2, TInt Idx3, const TVec<TAttrType>& SortByTypes, const TIntV& SortByIndices, TBool Asc = true);
+  void QSortPar(TIntV& V, const TVec<TAttrType>& SortByTypes, const TIntV& SortByIndices, TBool Asc = true);
 
   bool IsRowValid(TInt RowIdx) const{ return Next[RowIdx] != Invalid;}
   TInt GetLastValidRowIdx();
